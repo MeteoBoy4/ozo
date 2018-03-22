@@ -127,30 +127,31 @@ contains
 
       ! Write dimension data to the output file
       if ( calc_omegas .or. mode .eq. 'Q' ) then
-         call write_dimensions ( outfile, tdim )
+         call write_dimensions ( outfile, wrfin_file, tdim)
       end if
 
     end associate
 
   contains
 
-    subroutine write_dimensions ( file, tdim )
+    subroutine write_dimensions ( file, in_file, tdim )
       ! This subroutine writes dimension data to the output file.
-      type ( wrf_file ) :: file
+      type ( wrf_file ) :: file, in_file
       integer,dimension(:) :: tdim
       integer :: varids(4),varid
+      integer,dimension(1) :: a,b
 
-      do i = 1, 4
+      do i = 3, 4
          call check ( nf90_inq_varid ( &
               file % ncid, trim ( rname ( i ) ), varid ) )
          varids ( i ) = varid
       end do
 
-      call check( nf90_put_var(file % ncid, varids(1), file%xdim(:)) )
-      call check( nf90_put_var(file % ncid, varids(2), file%ydim(:)) )
       call check( nf90_put_var(file % ncid, varids(3), &
                   file%pressure_levels(:)/100.) )
-      call check( nf90_put_var(file % ncid, varids(4), tdim(:)) )
+      a = tdim( lbound(tdim))
+      b = tdim( ubound(tdim))
+      call check( nf90_put_var(file % ncid, varids(4), in_file % times( a(1) : b(1) )/60 ))
 
     end subroutine write_dimensions
 

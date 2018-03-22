@@ -55,9 +55,9 @@ module mod_wrf_file
      integer :: ncid, dims ( 4 )
      integer :: wrf_cu_phys
 !     real :: dx, dy
+     character (100) :: timestamp
      real, dimension ( : ), allocatable :: times, pressure_levels
      real, dimension ( :, : ), allocatable :: corpar
-     integer, dimension ( : ), allocatable :: xdim,ydim
      integer, dimension ( : ), allocatable :: nlon, nlat, nlev
      real, dimension ( : ), allocatable :: dx, dy, dlev
   end type wrf_file
@@ -81,29 +81,18 @@ contains
     f % pressure_levels = wrf_infile % pressure_levels
 
     ! Create dimensions and their variables to the new file
-    do i=1,3
-       call def_dim(f%ncid,rname(i),dimids(i),f%dims(i),.FALSE.)
+    do i=1,2
+       call def_dim(f%ncid,rname(i),dimids(i),f%dims(i),.FALSE.,.FALSE.)
     enddo
-    call def_dim(f%ncid,rname(4),dimids(4),f%dims(4),.TRUE.)
+    call def_dim(f%ncid,rname(3),dimids(3),f%dims(3),.FALSE.,.TRUE.)
+    call def_dim(f%ncid,rname(4),dimids(4),f%dims(4),.TRUE.,.TRUE.)
 
     ! Add axis attributes to dimensions
-    do i = 1, 4
+    do i = 3, 4
        call check ( nf90_inq_varid ( &
             f % ncid, trim ( rname ( i ) ), varid ) )
        varids ( i ) = varid
     end do
-    call check( nf90_put_att(f % ncid, varids (1),&
-         trim('standard_name'),trim('longitude') ) )
-    call check( nf90_put_att(f % ncid, varids (1),&
-         trim('units'),trim('degrees_east') ) )
-    call check( nf90_put_att(f % ncid, varids (1),&
-         trim('axis'),trim('X') ) )
-    call check( nf90_put_att(f % ncid, varids (2),&
-         trim('standard_name'),trim('latitude') ) )
-    call check( nf90_put_att(f % ncid, varids (2),&
-         trim('units'),trim('degrees_north') ) )
-    call check( nf90_put_att(f % ncid, varids (2),&
-         trim('axis'),trim('Y') ) )
     call check( nf90_put_att(f % ncid, varids (3),&
          trim('standard_name'),trim('air_pressure') ) )
     call check( nf90_put_att(f % ncid, varids (3),&
@@ -115,9 +104,12 @@ contains
     call check( nf90_put_att(f % ncid, varids (4),&
          trim('standard_name'),trim('time') ) )
     call check( nf90_put_att(f % ncid, varids (4),&
-         trim('units'),trim('hours since 1997-01-01 00:00:00') ) )
-    call check( nf90_put_att(f % ncid, varids (4),&
          trim('calendar'),trim('standard') ) )
+    call check( nf90_put_att(f % ncid, varids (4),&
+         trim('description'),trim(wrf_infile % timestamp) ) )
+    call check( nf90_put_att(f % ncid, varids (4),&
+         trim('units'),trim(wrf_infile % timestamp) ) )
+
 
     ! Create quasi-geostrophic omega variables
     if (mode.eq.'Q')then
@@ -273,13 +265,6 @@ contains
     ! Stop defining mode
     call check( nf90_enddef ( f % ncid ) )
 
-    ! Copy dimension data to the new file type-variable
-    allocate(f % xdim (f%dims(1)))
-    allocate(f % ydim (f%dims(2)))
-
-    f % xdim = (/(i, i=1,f%dims(1), 1)/)
-    f % ydim = (/(i, i=1,f%dims(2), 1)/)
-
     print*,"Outputfile created!"
   end function create_out_file
 
@@ -342,6 +327,7 @@ contains
          start = [ 1 ], &
          count = [ size ( f % times ) ] ) )
     f % times = f % times * 60
+    call check ( nf90_get_att ( f % ncid, varid, 'description', f % timestamp ) )
 
     print*,"Getting coriolisparameter from the input file..."
     allocate ( f % corpar ( f % dims ( 1 ), f % dims ( 2 ) ) )
@@ -445,18 +431,20 @@ end function real2d
     end if
   end subroutine check
 
-  subroutine def_dim(ncid,dim_name,dimid,len,unlimit)
+  subroutine def_dim(ncid,dim_name,dimid,len,unlimit,coordinate)
     implicit none
     character(*) :: dim_name
     integer :: ncid,dimid,varid,len
-    logical :: unlimit
+    logical :: unlimit,coordinate
 
     if(unlimit)then
        call check( nf90_def_dim(ncid, trim(dim_name), NF90_UNLIMITED, dimid) )
     else
        call check( nf90_def_dim(ncid, trim(dim_name), len, dimid) )
     endif
-    call check( nf90_def_var(ncid, trim(dim_name), NF90_REAL, dimid, varid) )
+    if(coordinate)then
+        call check( nf90_def_var(ncid, trim(dim_name), NF90_REAL, dimid, varid) )
+    endif
 
   end subroutine def_dim
 
