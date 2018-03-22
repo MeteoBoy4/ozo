@@ -12,7 +12,7 @@ contains
                               toler, ny1, ny2, mode, calc_omegas, calc_b, &
                               debug, calc_div, forc )
     ! This subroutine contains the main time stepping loop. It gets both
-    ! input and output files as input arguments. 
+    ! input and output files as input arguments.
     type ( wrf_file ), intent(in) :: wrfin_file, outfile
     character,         intent(in) :: mode
     logical,           intent(in) :: calc_omegas,calc_b,debug, calc_div, forc
@@ -28,7 +28,7 @@ contains
     integer, dimension ( : ),       allocatable :: tdim
     integer :: time, i
 
-    if (calc_b) then 
+    if (calc_b) then
        n_terms = n_terms + 1
     end if
 
@@ -40,7 +40,7 @@ contains
          dy     => wrfin_file % dy(1), &
          p_levs => wrfin_file % pressure_levels, &
          corpar => wrfin_file % corpar )
- 
+
       allocate ( tdim ( time_n-time_1+1 ) )
       allocate ( hTends ( nlon, nlat, nlev, n_terms ) )
       allocate ( omegas ( nlon, nlat, nlev, n_terms ) )
@@ -49,7 +49,23 @@ contains
       allocate ( vkhi (nlon, nlat, nlev) )
       allocate ( avortt (nlon, nlat, nlev) )
       allocate ( fvort (nlon, nlat, nlev) )
- 
+      allocate ( dT_dt (nlon, nlat, nlev))
+      allocate ( du_dt (nlon, nlat, nlev))
+      allocate ( dv_dt (nlon, nlat, nlev))
+      allocate ( dz_dt (nlon, nlat, nlev))
+      allocate ( q (nlon, nlat, nlev))
+      allocate ( fx (nlon, nlat, nlev))
+      allocate ( fy (nlon, nlat, nlev))
+      allocate ( w (nlon, nlat, nlev))
+      allocate ( zeta (nlon, nlat, nlev))
+      allocate ( zetatend (nlon, nlat, nlev))
+      allocate ( mulfact (nlon, nlat, nlev))
+      allocate ( sigma (nlon, nlat, nlev))
+      allocate ( tadv (nlon, nlat, nlev))
+      allocate ( vadv (nlon, nlat, nlev))
+      allocate ( mu_inv (nlon, nlat))
+      allocate ( p_sfc (nlon, nlat))
+
       call read_T_u_v_z ( wrfin_file, time_1 - 2 )
       call read_T_u_v_z ( wrfin_file, time_1 - 1 )
       i=0
@@ -84,7 +100,7 @@ contains
               dx, dy, corpar, q, fx, fy, dz_dt, dT_dt, zeta, zetatend, &
               uKhi, vKhi, sigma, mulfact, calc_b, hTends, vadv, tadv, &
               fvort, avortt )
-         
+
          ! Write data to the output file
          if ( mode .eq. 'Q' ) then
             call write_omegas_QG ( outfile, time-time_1+1, omegas_QG )
@@ -113,7 +129,7 @@ contains
       if ( calc_omegas .or. mode .eq. 'Q' ) then
          call write_dimensions ( outfile, tdim )
       end if
-      
+
     end associate
 
   contains
@@ -129,13 +145,13 @@ contains
               file % ncid, trim ( rname ( i ) ), varid ) )
          varids ( i ) = varid
       end do
-      
+
       call check( nf90_put_var(file % ncid, varids(1), file%xdim(:)) )
       call check( nf90_put_var(file % ncid, varids(2), file%ydim(:)) )
       call check( nf90_put_var(file % ncid, varids(3), &
                   file%pressure_levels(:)/100.) )
       call check( nf90_put_var(file % ncid, varids(4), tdim(:)) )
-   
+
     end subroutine write_dimensions
 
     subroutine read_T_u_v_z ( file, time )
@@ -304,7 +320,7 @@ contains
                 [ 1, 1, 1, time ], &
                 [ nlon, nlat, nlev, 1 ] ) )
         end if
-        
+
       end associate
     end subroutine write_omegas
 
@@ -351,7 +367,7 @@ contains
            nlon => file % dims ( 1 ), &
            nlat => file % dims ( 2 ), &
            nlev => file % dims ( 3 ) )
-        
+
         call check ( nf90_inq_varid ( ncid, &
              trim ( name ), varid ) )
         call check ( nf90_put_var ( ncid, varid, &
@@ -374,7 +390,7 @@ contains
            ncid => file % ncid, &
            nlon => file % dims ( 1 ), &
            nlat => file % dims ( 2 ) )
-        
+
         call check ( nf90_inq_varid ( ncid, &
              trim ( name ), varid ) )
         call check ( nf90_put_var ( ncid, varid, &

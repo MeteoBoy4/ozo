@@ -4,19 +4,19 @@ module mod_common_subrs
 contains
 
 !-------------------------------------------------------------------------------
-! This module contains some general subroutines which can be used both 
-! generalized omega equation and Zwack-okossi equation. 
+! This module contains some general subroutines which can be used both
+! generalized omega equation and Zwack-okossi equation.
 !-------------------------------------------------------------------------------
 
   function calmul(psfc,lev,nlev) result (mulfact)
 !   Calculation of multiplication factors for the attenuation of
 !   below-ground forcings
     real,dimension(:,:),  intent(in) :: psfc
-    real,dimension(:),    intent(in) :: lev 
+    real,dimension(:),    intent(in) :: lev
     integer,              intent(in) :: nlev
     real,dimension(:,:,:),allocatable :: mulfact
     real :: pm1
-    integer :: i,j,k,nlon,nlat,factor 
+    integer :: i,j,k,nlon,nlat,factor
     nlon=size(psfc,1); nlat=size(psfc,2)
     allocate(mulfact(nlon,nlat,nlev))
     factor=2
@@ -39,7 +39,7 @@ contains
              enddo
           enddo
        enddo
-       
+
     case (2) ! new version with mass-centered cells
        mulfact=1.
        do i=1,nlon
@@ -63,18 +63,18 @@ contains
              enddo
           enddo
        enddo
-          
+
     end select
   end function calmul
 
   subroutine irrotationalWind(u,v,dx,dy,uKhi,vKhi)
 !   This subroutine calculates irrotational wind components (uKhi,vKhi) from
-!   velocity potential. 
+!   velocity potential.
     use mod_poisson_DFT
     implicit none
 
     real,dimension(:,:,:),intent(in) :: u,v
-    real,                 intent(in) :: dx,dy 
+    real,                 intent(in) :: dx,dy
     real,dimension(:,:,:),intent(out) :: uKhi,vKhi
 
     integer :: nlon,nlat,nlev,k
@@ -83,12 +83,16 @@ contains
 
     nlon=size(u,1); nlat=size(u,2); nlev=size(u,3)
     allocate(khi(nlon,nlat,nlev))
+    allocate(dudx(nlon,nlat,nlev))
+    allocate(dvdy(nlon,nlat,nlev))
+    allocate(dkhidx(nlon,nlat,nlev))
+    allocate(dkhidy(nlon,nlat,nlev))
     allocate(bd_0(nlon+1))
 
 !   Calculate the divergence of wind
     dudx = xder_cart(u,dx)
     dvdy = yder_cart(v,dy)
-    
+
 
 !   Velocity potential is equal to inverse laplacian of divergence
 
@@ -105,21 +109,25 @@ contains
 !   Wind components are equal to derivatives
     uKhi=dkhidx
     vKhi=dkhidy
-              
+
   end subroutine irrotationalWind
 
   function curl_cart ( u, v, dx, dy ) result ( zeta )
     real, dimension ( :, :, : ), intent ( in ) :: u, v
     real,                        intent ( in ) :: dx,dy
     real, dimension ( :, :, : ), allocatable :: zeta, du_dy, dv_dx
-    
+
     allocate ( zeta ( size (u, 1 ), size ( u, 2 ), &
          size ( u, 3 ) ) )
+    allocate ( du_dy ( size (u, 1 ), size ( u, 2 ), &
+         size ( u, 3 ) ))
+    allocate ( dv_dx ( size (u, 1 ), size ( u, 2 ), &
+         size ( u, 3 ) ))
 
     du_dy = yder_cart(u,dy)
     dv_dx = xder_cart(v,dx)
     zeta = dv_dx - du_dy
-    
+
   end function curl_cart
 
   function pder(f,dp) result (dfdp)
@@ -144,7 +152,7 @@ contains
        case(1)
           dfdp(:,:,2:nlev-1)=f(:,:,3:nlev)-f(:,:,1:nlev-2)
           dfdp(:,:,2:nlev-1)=dfdp(:,:,2:nlev-1)*inv_dp
-          
+
           dfdp(:,:,1)=(f(:,:,2)-f(:,:,1))/dp
           dfdp(:,:,nlev)=(f(:,:,nlev)-f(:,:,nlev-1))/dp
        case(2)
@@ -175,7 +183,7 @@ contains
     allocate(dfdx(nlon,nlat,nlev))
     acc=1
     inv_dx = 1.0 / (2.*dx)
-    
+
     select case (acc)
     case (1)
        do k=1,nlev
@@ -216,7 +224,7 @@ contains
 
   end function xder_cart
 
-  function yder_cart(f,dy) result(dfdy)                          
+  function yder_cart(f,dy) result(dfdy)
 !   Calculation of y derivatives
 !   One-sided estimates are used at the southern and northern boundaries
     implicit none
@@ -231,7 +239,7 @@ contains
     inv_dy = 1.0 / (2.*dy)
     acc=1
     select case(acc)
-       
+
     case(1)
        do k=1,nlev
           do j=2,nlat-1
@@ -257,7 +265,7 @@ contains
                    dfdy(i,nlat,k)=(f(i,nlat-2,k)-4*f(i,nlat-1,k) &
                                  +3*f(i,nlat,k))/(2*dy)
                 else
-                   dfdy(i,j,k)=(f(i,j-2,k)-8*f(i,j-1,k)+8*f(i,j+1,k)& 
+                   dfdy(i,j,k)=(f(i,j-2,k)-8*f(i,j-1,k)+8*f(i,j+1,k)&
                                -f(i,j+2,k))/(12*dy)
                 end if
              enddo
@@ -267,7 +275,7 @@ contains
 
 
   end function yder_cart
-  
+
   function advect_cart(u,v,f,dx,dy) result(adv)
 !   Computing u*dfdx + v*dfdy in cartesian coordinates
     implicit none
@@ -276,19 +284,21 @@ contains
     real,                 intent(in) :: dx,dy
     real,dimension(:,:,:),allocatable :: dfdx,dfdy,adv
     allocate(adv(size(u,1),size(u,2),size(u,3)))
+    allocate(dfdx(size(u,1),size(u,2),size(u,3)))
+    allocate(dfdy(size(u,1),size(u,2),size(u,3)))
 
     dfdx = xder_cart(f,dx)
     dfdy = yder_cart(f,dy)
-    
-    adv=u*dfdx+v*dfdy   
-  
+
+    adv=u*dfdx+v*dfdy
+
   end function advect_cart
 
   function define_sigma(t,lev) result(sigma)
 !   Calculatig sigma stability parameter in isobaric coordinates
     use mod_const
     implicit none
-   
+
     real,dimension(:,:,:),intent(in) :: t
     real,dimension(:),    intent(in) :: lev
     real                             :: dlev
@@ -299,6 +309,7 @@ contains
     nlon=size(t,1); nlat=size(t,2); nlev=size(t,3)
     dlev=lev(2)-lev(1)
     allocate(theta(nlon,nlat,nlev),sigma(nlon,nlat,nlev))
+    allocate(dThetaDp(nlon,nlat,nlev))
 
     do k=1,nlev
        theta(:,:,k)=log(t(:,:,k))-(r/cp)*log(lev(k)/1e5)
@@ -308,7 +319,7 @@ contains
     do k=1,nlev
        sigma(:,:,k)=-R*t(:,:,k)/lev(k)*dThetaDp(:,:,k)
     enddo
-    
+
   end function define_sigma
 
   function define_sp(sigma,lev) result(sp)
@@ -326,7 +337,7 @@ contains
     do k=1,size(sigma,3)
        sp(:,:,k)=sigma(:,:,k)*lev(k)/r
     enddo
-    
+
   end function define_sp
 
   function laplace_cart(f,dx,dy) result(lapl)
@@ -359,7 +370,7 @@ contains
        lapl ( nlon, :, : ) = f( nlon - 1, :, : ) + f ( 1, :, : ) &
             - 2 * f( nlon, :, : )
        lapl = lapl * inv_dx
-       
+
        ! y-directon
        lapl ( :, 2 : nlat -1, : ) = lapl ( :, 2 : nlat -1, : ) &
             + ( f ( :, 1 : nlat -2, : ) + f ( :, 3 : nlat, :) &
@@ -409,9 +420,9 @@ contains
              enddo
           enddo
        enddo
-       
-    end select     
-          
+
+    end select
+
   end function laplace_cart
-  
+
 end module mod_common_subrs

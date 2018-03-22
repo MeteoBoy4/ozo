@@ -76,8 +76,9 @@ contains
 
     ! Copy dimension information from wrf input file
     f % dims = wrf_infile % dims
+    allocate(f % pressure_levels(wrf_infile % nlev(1)))
     f % pressure_levels = wrf_infile % pressure_levels
-    
+
     ! Create dimensions and their variables to the new file
     do i=1,3
        call def_dim(f%ncid,rname(i),dimids(i),f%dims(i),.FALSE.)
@@ -176,7 +177,7 @@ contains
           call check( nf90_put_att(f % ncid, varid,trim('units'),&
                trim('m s-1') ) )
        end do
-       
+
        if (calc_b) then ! create htend b-variable if wanted
           status = nf90_def_var ( f % ncid, trim ( htend_b_name ), &
                NF90_FLOAT, dimids, varid )
@@ -221,7 +222,7 @@ contains
 
        if (forc) then
 
-          ! Create vadv variable  
+          ! Create vadv variable
           status = nf90_def_var ( f % ncid, trim ( 'vadv' ), NF90_FLOAT, &
                dimids, varid )
           if ( .not. ( status == nf90_enameinuse .or. status == NF90_NOERR ) ) &
@@ -230,7 +231,7 @@ contains
                trim('vorticity advection') ) )
           call check( nf90_put_att(f % ncid, varid,trim('units'),&
                trim('1/s^2') ) )
-          ! Create tadv variable  
+          ! Create tadv variable
           status = nf90_def_var ( f % ncid, trim ( 'tadv' ), NF90_FLOAT, &
                dimids, varid )
           if ( .not. ( status == nf90_enameinuse .or. status == NF90_NOERR ) ) &
@@ -239,7 +240,7 @@ contains
                trim('temperature advection') ) )
           call check( nf90_put_att(f % ncid, varid,trim('units'),&
                trim('K/s') ) )
-          ! Create friction variable  
+          ! Create friction variable
           status = nf90_def_var ( f % ncid, trim ( 'fvort' ), NF90_FLOAT, &
                dimids, varid )
           if ( .not. ( status == nf90_enameinuse .or. status == NF90_NOERR ) ) &
@@ -248,7 +249,7 @@ contains
                trim('vorticity tendency due to friction') ) )
           call check( nf90_put_att(f % ncid, varid,trim('units'),&
                trim('1/s^2') ) )
-          ! Create diabatic heating variable  
+          ! Create diabatic heating variable
           status = nf90_def_var ( f % ncid, trim ( 'diab' ), NF90_FLOAT, &
                dimids, varid )
           if ( .not. ( status == nf90_enameinuse .or. status == NF90_NOERR ) ) &
@@ -257,7 +258,7 @@ contains
                trim('Diabatic heating') ) )
           call check( nf90_put_att(f % ncid, varid,trim('units'),&
                trim('K/s') ) )
-          ! Create ageostrophic vorticity tendency variable  
+          ! Create ageostrophic vorticity tendency variable
           status = nf90_def_var ( f % ncid, trim ( 'ageo' ), NF90_FLOAT, &
                dimids, varid )
           if ( .not. ( status == nf90_enameinuse .or. status == NF90_NOERR ) ) &
@@ -270,7 +271,7 @@ contains
 
     ! Stop defining mode
     call check( nf90_enddef ( f % ncid ) )
-    
+
     ! Copy dimension data to the new file type-variable
     allocate(f % xdim (f%dims(1)))
     allocate(f % ydim (f%dims(2)))
@@ -288,7 +289,7 @@ contains
 
     print*,"Opening file: ",fname
     call check( nf90_open ( fname, NF90_WRITE, f % ncid ) )
-    
+
     print*,"Inquiring dimensions from the input file..."
     do i = 1, 4
        call check ( nf90_inq_dimid ( &
@@ -296,12 +297,12 @@ contains
        call check ( nf90_inquire_dimension ( &
             f % ncid, dimid, len = f % dims ( i ) ) )
     end do
-    
-    ! Number of resolutions in the solving of omega equation 
+
+    ! Number of resolutions in the solving of omega equation
     nres=1+int(log(max(f%dims(1),f%dims(2),f%dims(3))/5.)/log(2.))
     allocate(f % nlon ( nres ), f % nlat ( nres ), f % nlev ( nres ) )
     allocate(f % dx ( nres ), f % dy ( nres ), f % dlev ( nres ) )
-   
+
     print*,"Getting attributes from the input file..."
     call check ( nf90_get_att ( &
          f % ncid, NF90_GLOBAL, 'DX', f % dx(1) ) )
@@ -318,10 +319,10 @@ contains
 
     f % nlon(1) = f % dims(1)
     f % nlat(1) = f % dims(2)
-    f % nlev(1) = f % dims(3)    
+    f % nlev(1) = f % dims(3)
     f % dlev(1) = f % pressure_levels(2) - f % pressure_levels(1)
 
-    ! Number of different resolutions in solving the equation = nres 
+    ! Number of different resolutions in solving the equation = nres
     ! Choose so that the coarsest grid has at least 5 points
     do i=2,nres
        f % nlon(i) = max(f % nlon(i-1)/2,5)
@@ -331,10 +332,10 @@ contains
        f % dy(i) = f % dy(1)*real(f % nlat(1))/real(f % nlat(i))
        f % dlev(i) = f % dlev(1)*real(f % nlev(1))/real(f % nlev(i))
     enddo
-    
+
     print*,"Getting time information from the input file..."
     allocate ( f % times ( f % dims ( 4 ) ) )
-!    f % times = (/ ( i, i = 0, f % dims ( 4 ) - 1, 1 ) /) 
+!    f % times = (/ ( i, i = 0, f % dims ( 4 ) - 1, 1 ) /)
     call check ( nf90_inq_varid ( f % ncid, 'XTIME', varid ) )
     call check ( nf90_get_var ( f % ncid, varid, f % times, &
          start = [ 1 ], &
@@ -380,6 +381,7 @@ contains
     real, dimension ( :, : ), allocatable :: real2d
     integer :: i
 
+    allocate(real2d(file % dims(1), file % dims(2)))
     real2d = data ( names ( 1 ) )
     do i = 2, size ( names )
        real2d = real2d + data ( names ( i ) )
@@ -398,7 +400,7 @@ contains
            start = [ 1, 1, time ], count = [ shape ( data ), 1 ] ) )
 
     end function data
-  
+
 end function real2d
 
   function real3d ( file, time, names )
@@ -409,6 +411,7 @@ end function real2d
     integer :: i
 
 !    print*,'Reading ',trim(names(1))
+    allocate(real3d(file % dims(1), file % dims(2), file % dims(3)))
     real3d = data ( names ( 1 ) )
 
     do i = 2, size ( names )
@@ -422,15 +425,15 @@ end function real2d
       real, dimension ( :, :, : ), allocatable :: data
       character ( * ) :: name
       integer :: varid
-      
+
       allocate ( data ( &
            file % dims ( 1 ), file % dims ( 2 ), file % dims ( 3 ) ) )
-     
+
       call check ( nf90_inq_varid ( file % ncid, trim ( name ), varid ) )
       call check ( nf90_get_var ( file % ncid, varid, data, &
            start = [ 1, 1, 1, time ], count = [ shape ( data ), 1 ] ) )
     end function data
-  
+
   end function real3d
 
   subroutine check ( status )
@@ -446,14 +449,14 @@ end function real2d
     character(*) :: dim_name
     integer :: ncid,dimid,varid,len
     logical :: unlimit
-    
+
     if(unlimit)then
        call check( nf90_def_dim(ncid, trim(dim_name), NF90_UNLIMITED, dimid) )
     else
        call check( nf90_def_dim(ncid, trim(dim_name), len, dimid) )
     endif
     call check( nf90_def_var(ncid, trim(dim_name), NF90_REAL, dimid, varid) )
-    
+
   end subroutine def_dim
-  
+
 end module mod_wrf_file

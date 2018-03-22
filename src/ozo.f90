@@ -15,10 +15,10 @@ program zo
   read(*,nml=PARAM)
   calc_b=.false.
 
-  if(mode.eq.'G')write(*,*)'Generalized omega equation'   
-  if(mode.eq.'Q')write(*,*)'Quasi-geostrophic omega equation'   
-  if(mode.eq.'T')write(*,*)'Generalized test version'   
-  if(mode.eq.'t')write(*,*)'Quasigeostrophic test version'   
+  if(mode.eq.'G')write(*,*)'Generalized omega equation'
+  if(mode.eq.'Q')write(*,*)'Quasi-geostrophic omega equation'
+  if(mode.eq.'T')write(*,*)'Generalized test version'
+  if(mode.eq.'t')write(*,*)'Quasigeostrophic test version'
   if(mode.ne.'G'.and.mode.ne.'Q'.and.mode.ne.'T'.and.mode.ne.'t')then
      write(*,*)'Unknown mode of operation. Aborting'
      stop
