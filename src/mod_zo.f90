@@ -21,7 +21,8 @@ contains
     real,dimension(:,:,:,:),intent(in) :: omegas
     real,dimension(:,:,:),  intent(in) :: t,u,v,w,xfrict,yfrict,zeta
     real,dimension(:,:,:),  intent(in) :: ttend,mulfact,uKhi,vKhi,sigma
-    real,dimension(:),      intent(in) :: lev,corpar
+    real,dimension(:),      intent(in) :: lev
+    real,dimension(:,:),    intent(in) :: corpar
     real,                   intent(in) :: dx,dy
     logical,                intent(in) :: calc_b
     real,dimension(:,:,:,:),intent(inout) :: hTends
@@ -201,7 +202,7 @@ contains
     real,dimension(:,:,:,:),intent(in) :: omegas
     real,dimension(:,:,:),intent(in) :: u,v,w,zeta,zetatend,uKhi,vKhi,ztend
     real,dimension(:,:,:),intent(in) :: xfrict,yfrict,mulfact
-    real,dimension(:),intent(in) :: corpar
+    real,dimension(:,:),intent(in) :: corpar
     real,dimension(:,:,:),intent(inout) :: vorTend_omegaWRF
     real,dimension(:,:,:,:),intent(inout) :: vortTends
 
@@ -222,7 +223,9 @@ contains
     vTend=0.
 
     do j=1,nlat
-       eta(:,j,:)=zeta(:,j,:)+corpar(j)
+        do i=1,nlon
+            eta(i,j,:)=zeta(i,j,:)+corpar(i,j)
+        end do
     enddo
 
 !   Omega-related vorticity equation terms
@@ -359,12 +362,12 @@ contains
 !   Output: Ageostrophic vorticity tendency (avortt)
 
     real,dimension(:,:,:),intent(in) :: zetatend,ztend
-    real,dimension(:),    intent(in) :: corpar
+    real,dimension(:,:),    intent(in) :: corpar
     real,                 intent(in) :: dx,dy
     real,dimension(:,:,:),intent(inout) :: avortt
 
     real,dimension(:,:,:),allocatable :: lapl,gvort
-    integer :: nlon,nlat,nlev,j
+    integer :: nlon,nlat,nlev,j,i
     nlon=size(ztend,1); nlat=size(ztend,2); nlev=size(ztend,3)
     allocate(gvort(nlon,nlat,nlev))
     allocate(lapl(nlon,nlat,nlev))
@@ -374,7 +377,9 @@ contains
 
 !   Geostrophic vorticity tendency
     do j=1,nlat
-       gvort(:,j,:)=(g/corpar(j))*lapl(:,j,:)
+        do i=1,nlon
+            gvort(i,j,:)=(g/corpar(i,j))*lapl(i,j,:)
+        end do
     enddo
 
 !   Ageostrophic vorticity tendency is equal to real vorticity tendency
@@ -396,7 +401,7 @@ contains
     real,dimension(:,:,:),intent(in) :: tadv,tadvs,q,sp
     real,                 intent(in) :: dx,dy
     real,dimension(:,:,:),intent(in) :: w,ztend
-    real,dimension(:),intent(in) :: corpar
+    real,dimension(:,:),intent(in) :: corpar
     logical,intent(in) :: calc_b
     real,dimension(:,:,:),intent(inout) :: vorTend_omegaWRF
     real,dimension(:,:,:,:),intent(inout) :: hTends
@@ -422,7 +427,9 @@ contains
     gvtend_omegaWRF=0.
 
     do j=1,nlat
-       corf(:,j,:)=corpar(j)
+       do i=1,nlon
+            corf(i,j,:)=corpar(i,j)
+       end do
     enddo
 
 !   Temperature tendencies

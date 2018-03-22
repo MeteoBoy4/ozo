@@ -71,7 +71,9 @@ contains
 
 !   Calculation of coriolisparameter field
     do j=1,nlat
-       corfield(:,j,:,1) = file % corpar(j)
+       do i=1,nlon
+            corfield(i,j,:,1) = file % corpar(i,j)
+       end do
     enddo
 
 !   For quasi-geostrophic equation: calculation of geostrophic winds
@@ -441,7 +443,7 @@ contains
 !   omega equation elliptic
 !
     real,dimension(:,:,:),intent(in) :: sigmaraw,zetaraw,dudp,dvdp
-    real,dimension(:),    intent(in) :: corpar
+    real,dimension(:,:),    intent(in) :: corpar
     real,dimension(:,:,:),intent(inout) :: zeta,feta,sigma
     real,                 intent(in) :: sigmamin,etamin
     integer :: nlon,nlat,nlev,i,j,k
@@ -456,18 +458,18 @@ contains
              sigma(i,j,k)=max(sigmaraw(i,j,k),sigmamin)
              zeta(i,j,k)=0.
              ! Northern Hemisphere
-             if(corpar(j).gt.1e-7)then
-                zeta(i,j,k)=max(zetaraw(i,j,k),etamin+corpar(j)/ &
+             if(corpar(i,j).gt.1e-7)then
+                zeta(i,j,k)=max(zetaraw(i,j,k),etamin+corpar(i,j)/ &
                             (4*sigma(i,j,k))*(dudp(i,j,k)**2.+dvdp(i,j,k)**2.) &
-                            -corpar(j))
+                            -corpar(i,j))
              endif
              ! Southern Hemisphere
-             if(corpar(j).lt.-1e-7)then
-                zeta(i,j,k)=min(zetaraw(i,j,k),-etamin+corpar(j)/ &
+             if(corpar(i,j).lt.-1e-7)then
+                zeta(i,j,k)=min(zetaraw(i,j,k),-etamin+corpar(i,j)/ &
                             (4*sigma(i,j,k))*(dudp(i,j,k)**2.+dvdp(i,j,k)**2.) &
-                            -corpar(j))
+                            -corpar(i,j))
              endif
-             feta(i,j,k)=(zeta(i,j,k)+corpar(j))*corpar(j)
+             feta(i,j,k)=(zeta(i,j,k)+corpar(i,j))*corpar(i,j)
           enddo
        enddo
     enddo

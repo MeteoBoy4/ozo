@@ -55,7 +55,8 @@ module mod_wrf_file
      integer :: ncid, dims ( 4 )
      integer :: wrf_cu_phys
 !     real :: dx, dy
-     real, dimension ( : ), allocatable :: times, pressure_levels, corpar
+     real, dimension ( : ), allocatable :: times, pressure_levels
+     real, dimension ( :, : ), allocatable :: corpar
      integer, dimension ( : ), allocatable :: xdim,ydim
      integer, dimension ( : ), allocatable :: nlon, nlat, nlev
      real, dimension ( : ), allocatable :: dx, dy, dlev
@@ -343,11 +344,11 @@ contains
     f % times = f % times * 60
 
     print*,"Getting coriolisparameter from the input file..."
-    allocate ( f % corpar ( f % dims ( 2 ) ) )
+    allocate ( f % corpar ( f % dims ( 1 ), f % dims ( 2 ) ) )
     call check ( nf90_inq_varid ( f % ncid, 'F', varid ) )
     call check ( nf90_get_var ( f % ncid, varid, f % corpar, &
          start = [ 1, 1, 2 ], &
-         count = [ 1, size ( f % corpar ), 1 ] ) )
+         count = [ size ( f % corpar, 1 ), size ( f % corpar, 2 ), 1 ] ) )
 
     print*,"Input file opened succesfully!"
   end function open_wrf_file
