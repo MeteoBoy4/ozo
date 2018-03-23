@@ -1,6 +1,6 @@
 module mod_poisson_DFT
   implicit none
-  
+
 contains
 
   subroutine poisson_solver_2D(f, dx, dy, phi, bd_ay, bd_by)
@@ -13,16 +13,16 @@ contains
          bd_ay, bd_by
     real, intent ( in ) :: dx, dy
     character ( 3 ), parameter :: solver="DFT"
-        
+
     select case ( solver )
        case ( "DFT" )
           call poisson_solver_DFT( f, dx, dy, bd_ay, bd_by, phi )
        case ( "Gre" )
           call poisson_solver_Green ( f, dx, dy, phi )
        end select
-       
+
   end subroutine poisson_solver_2D
- 
+
   subroutine poisson_solver_DFT ( rho, dx, dy, bd_ay, bd_by, phi )
     use mkl_poisson
     use mod_poisson_interp
@@ -31,7 +31,7 @@ contains
     real, dimension ( :, : ), intent ( out ) :: phi
     integer :: ipar(128), stat, nx, ny
     double precision :: q, ax, bx, ay, by
-    double precision, dimension ( : ), intent ( in ) :: bd_ay, bd_by 
+    double precision, dimension ( : ), intent ( in ) :: bd_ay, bd_by
     double precision, dimension ( : ), allocatable :: &
          dpar, bd_ax, bd_bx
     character ( 4 ), parameter :: BCTYPE="PPDD"
@@ -44,8 +44,8 @@ contains
 
     nlon = size ( rho, 1)
     nlat = size ( rho, 2)
-    nx = nlon
-    ny = nlat
+    nx = nlon - 1
+    ny = nlat - 1
     allocate ( dpar ( 13 * nx / 2 + 7 ) )
     allocate ( bd_ax ( ny + 1 ), bd_bx ( ny + 1 ) )
     allocate ( f_vc ( nx + 1, ny + 1 ) )
@@ -57,13 +57,7 @@ contains
     bd_ax = 0.0e0
     bd_bx = 0.0e0
     IPAR = 0
-    f_vc = 0.0e0
-
-    if ( interp ) then
-       call interpolate_mc_to_vc( rho, f_vc, BCTYPE )
-    else
-       call shift_mc_to_vc ( rho, f_vc )
-    end if
+    f_vc = rho
 
     f_vc = -1.0e0 * f_vc
 
@@ -81,11 +75,7 @@ contains
          xhandle, ipar, dpar, stat)
     call free_Helmholtz_2D(xhandle, ipar, stat)
 
-    if ( interp ) then
-       call interpolate_vc_to_mc( f_vc, phi )
-    else
-       call shift_vc_to_mc ( f_vc, phi )
-    end if
+    phi = f_vc
 
   end subroutine poisson_solver_DFT
 
