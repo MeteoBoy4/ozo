@@ -22,7 +22,7 @@ contains
     real, dimension ( :, :, :, : ), allocatable :: omegas, hTends, omegas_QG
     real, dimension ( :, :, : ),    allocatable :: dT_dt, du_dt, dv_dt, dz_dt, &
                                                    fx, fy, q, w, mulfact,zeta, &
-                                                   zetatend,ukhi,vkhi,sigma,vadv, &
+                                                   zetatend,ukhi,vkhi,khi,sigma,vadv, &
                                                    tadv,fvort,avortt
     real, dimension ( :, : ),       allocatable :: mu_inv, p_sfc
     integer, dimension ( : ),       allocatable :: tdim
@@ -47,6 +47,7 @@ contains
       allocate ( omegas_QG ( nlon, nlat, nlev, 3 ) )
       allocate ( ukhi (nlon, nlat, nlev) )
       allocate ( vkhi (nlon, nlat, nlev) )
+      allocate ( khi (nlon, nlat, nlev) )
       allocate ( avortt (nlon, nlat, nlev) )
       allocate ( fvort (nlon, nlat, nlev) )
       allocate ( dT_dt (nlon, nlat, nlev))
@@ -85,7 +86,7 @@ contains
          mulfact  = calmul(p_sfc, p_levs, nlev)
          sigma = define_sigma(T, p_levs)
          !   Calculation of velocity potential
-         if(calc_div) call irrotationalWind(u,v,dx,dy,uKhi,vKhi)
+         if(calc_div) call irrotationalWind(u,v,dx,dy,uKhi,vKhi,khi)
 
          if ( calc_omegas ) then
             call calculate_omegas( wrfin_file, T, u, v, w, z, &
@@ -121,6 +122,9 @@ contains
             call write3d ( outfile, time-time_1+1, 'fvort', fvort)
             call write3d ( outfile, time-time_1+1, 'diab', q)
             call write3d ( outfile, time-time_1+1, 'ageo', avortt)
+         end if
+         if (calc_div) then
+            call write3d ( outfile, time-time_1+1, 'khi', khi)
          end if
 
       end do

@@ -64,10 +64,10 @@ module mod_wrf_file
 
 contains
 
-  function create_out_file ( fname, wrf_infile, mode, calc_b, forc ) result ( f )
+  function create_out_file ( fname, wrf_infile, mode, calc_b, forc, calc_div ) result ( f )
     character ( * ),   intent ( in ) :: fname ! file name
     type ( wrf_file ), intent ( in ) :: wrf_infile ! wrf inputfile
-    logical,           intent ( in ) :: calc_b, forc
+    logical,           intent ( in ) :: calc_b, forc, calc_div
     type ( wrf_file ) :: f
     integer :: dimids(4),i,status,varid,varids(4)
     character :: mode
@@ -261,6 +261,18 @@ contains
           call check( nf90_put_att(f % ncid, varid,trim('units'),&
                trim('1/s^2') ) )
        end if
+
+       if (calc_div) then
+            ! Create khi variable
+          status = nf90_def_var ( f % ncid, trim ( 'khi' ), NF90_FLOAT, &
+               dimids, varid )
+          if ( .not. ( status == nf90_enameinuse .or. status == NF90_NOERR ) ) &
+               call check ( status )
+          call check( nf90_put_att(f % ncid, varid,trim('description'),&
+               trim('velocity potential') ) )
+          call check( nf90_put_att(f % ncid, varid,trim('units'),&
+               trim('m^2/s') ) )
+        end if
 
     ! Stop defining mode
     call check( nf90_enddef ( f % ncid ) )

@@ -67,7 +67,7 @@ contains
     end select
   end function calmul
 
-  subroutine irrotationalWind(u,v,dx,dy,uKhi,vKhi)
+  subroutine irrotationalWind(u,v,dx,dy,uKhi,vKhi,khi)
 !   This subroutine calculates irrotational wind components (uKhi,vKhi) from
 !   velocity potential.
     use mod_poisson_DFT
@@ -75,14 +75,13 @@ contains
 
     real,dimension(:,:,:),intent(in) :: u,v
     real,                 intent(in) :: dx,dy
-    real,dimension(:,:,:),intent(out) :: uKhi,vKhi
+    real,dimension(:,:,:),intent(out) :: uKhi,vKhi,khi
 
     integer :: nlon,nlat,nlev,k
     double precision, dimension ( : ), allocatable ::  bd_0
-    real,dimension(:,:,:),allocatable :: dudx,dvdy,khi,dkhidx,dkhidy
+    real,dimension(:,:,:),allocatable :: dudx,dvdy,dkhidx,dkhidy
 
     nlon=size(u,1); nlat=size(u,2); nlev=size(u,3)
-    allocate(khi(nlon,nlat,nlev))
     allocate(dudx(nlon,nlat,nlev))
     allocate(dvdy(nlon,nlat,nlev))
     allocate(dkhidx(nlon,nlat,nlev))

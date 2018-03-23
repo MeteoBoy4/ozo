@@ -26,7 +26,7 @@ program zo
 
   wrfin_file = open_wrf_file ( infile )
   if (calc_omegas) then
-     out_file = create_out_file ( outfile, wrfin_file, mode, calc_b, forc )
+     out_file = create_out_file ( outfile, wrfin_file, mode, calc_b, forc, calc_div )
   else
      out_file = open_out_file ( outfile )
   end if
