@@ -78,7 +78,7 @@ contains
     real,dimension(:,:,:),intent(out) :: uKhi,vKhi,khi
 
     integer :: nlon,nlat,nlev,k
-    double precision, dimension ( : ), allocatable ::  bd_0
+    double precision, dimension ( : ), allocatable ::  bd_0y,bd_0x
     real,dimension(:,:,:),allocatable :: dudx,dvdy,dkhidx,dkhidy
 
     nlon=size(u,1); nlat=size(u,2); nlev=size(u,3)
@@ -86,7 +86,7 @@ contains
     allocate(dvdy(nlon,nlat,nlev))
     allocate(dkhidx(nlon,nlat,nlev))
     allocate(dkhidy(nlon,nlat,nlev))
-    allocate(bd_0(nlon+1))
+    allocate(bd_0y(nlon), bd_0x(nlat))
 
 !   Calculate the divergence of wind
     dudx = xder_cart(u,dx)
@@ -95,10 +95,11 @@ contains
 
 !   Velocity potential is equal to inverse laplacian of divergence
 
-    bd_0=0.0e0
+    bd_0y=0.0e0
+    bd_0x=0.0e0
     do k=1,nlev
        call poisson_solver_2D(dudx(:,:,k)+dvdy(:,:,k),dx,dy,khi(:,:,k),&
-            bd_0,bd_0)
+            bd_0y,bd_0y,bd_0x,bd_0x)
     enddo
 
 !   Derivatives of velocity potential

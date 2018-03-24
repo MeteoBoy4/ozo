@@ -3,27 +3,27 @@ module mod_poisson_DFT
 
 contains
 
-  subroutine poisson_solver_2D(f, dx, dy, phi, bd_ay, bd_by)
+  subroutine poisson_solver_2D(f, dx, dy, phi, bd_ay, bd_by, bd_ax, bd_bx)
     use mod_poisson_green
     implicit none
 
     real, dimension ( :, : ), intent ( in ) :: f
     real, dimension ( :, : ), intent ( out ) :: phi
     double precision, dimension ( : ), intent ( in ), optional :: &
-         bd_ay, bd_by
+         bd_ay, bd_by, bd_ax, bd_bx
     real, intent ( in ) :: dx, dy
     character ( 3 ), parameter :: solver="DFT"
 
     select case ( solver )
        case ( "DFT" )
-          call poisson_solver_DFT( f, dx, dy, bd_ay, bd_by, phi )
+          call poisson_solver_DFT( f, dx, dy, bd_ay, bd_by, bd_ax, bd_bx, phi )
        case ( "Gre" )
           call poisson_solver_Green ( f, dx, dy, phi )
        end select
 
   end subroutine poisson_solver_2D
 
-  subroutine poisson_solver_DFT ( rho, dx, dy, bd_ay, bd_by, phi )
+  subroutine poisson_solver_DFT ( rho, dx, dy, bd_ay, bd_by, bd_ax, bd_bx, phi )
     use mkl_poisson
     use mod_poisson_interp
     real, intent ( in ) :: dx, dy
@@ -31,10 +31,9 @@ contains
     real, dimension ( :, : ), intent ( out ) :: phi
     integer :: ipar(128), stat, nx, ny
     double precision :: q, ax, bx, ay, by
-    double precision, dimension ( : ), intent ( in ) :: bd_ay, bd_by
-    double precision, dimension ( : ), allocatable :: &
-         dpar, bd_ax, bd_bx
-    character ( 4 ), parameter :: BCTYPE="PPDD"
+    double precision, dimension ( : ), intent ( in ) :: bd_ay, bd_by, bd_ax, bd_bx
+    double precision, dimension ( : ), allocatable :: dpar
+    character ( 4 ), parameter :: BCTYPE="DDDD"
     double precision, dimension ( :, : ), allocatable :: f_vc
     type(DFTI_DESCRIPTOR), pointer :: xhandle
     integer :: nlon, nlat
@@ -47,17 +46,14 @@ contains
     nx = nlon - 1
     ny = nlat - 1
     allocate ( dpar ( 13 * nx / 2 + 7 ) )
-    allocate ( bd_ax ( ny + 1 ), bd_bx ( ny + 1 ) )
     allocate ( f_vc ( nx + 1, ny + 1 ) )
     ax = 0.0e0
     bx = nx * dx
     ay = 0.0e0
     by = ny * dy
     Q = 0.0e0
-    bd_ax = 0.0e0
-    bd_bx = 0.0e0
     IPAR = 0
-    f_vc = rho
+    f_vc = dble(rho)
 
     f_vc = -1.0e0 * f_vc
 

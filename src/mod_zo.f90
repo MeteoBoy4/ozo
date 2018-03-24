@@ -411,14 +411,16 @@ contains
     real,dimension(:,:,:,:),allocatable :: tempTends,gvortTends
     integer :: nlon,nlat,nlev,i,j,k
     double precision, dimension ( : , : ), allocatable :: &
-         bd_ay, bd_by, bd_0
+         bd_ay, bd_by, bd_ax, bd_bx
+    double precision, dimension ( :, : ), allocatable :: bd_0y, bd_0x
 
     nlon=size(q,1); nlat=size(q,2); nlev=size(q,3)
 
     allocate(tempTends(nlon,nlat,nlev,n_terms))
     allocate(gvortTends(nlon,nlat,nlev,n_terms))
-    allocate ( bd_ay ( nlon + 1, nlev ), bd_by ( nlon + 1, nlev ) )
-    allocate ( bd_0 ( nlon + 1, nlev ) )
+    allocate ( bd_ay ( nlon, nlev ), bd_by ( nlon, nlev ) )
+    allocate ( bd_ax ( nlat, nlev ), bd_bx ( nlat, nlev ) )
+    allocate ( bd_0y ( nlon, nlev ), bd_0x ( nlat, nlev ) )
     allocate(ttend_omegaWRF(nlon,nlat,nlev))
     allocate(corf(nlon,nlat,nlev))
     allocate(gvtend_omegaWRF(nlon,nlat,nlev))
@@ -444,21 +446,18 @@ contains
 !   zwack-okossi vorticity equation.
 
     do k = 1, nlev
-       do i = 2, nlon
-          bd_ay ( i, k ) = ( ztend ( i, 1, k ) + &
-               ztend ( i - 1, 1, k ) ) / 2
-          bd_by ( i, k ) = ( ztend ( i, nlat, k ) + &
-               ztend ( i - 1, nlat, k ) ) / 2
+       do i = 1, nlon
+          bd_ay ( i, k ) = ztend ( i, 1, k )
+          bd_by ( i, k ) = ztend ( i, nlat, k )
+       enddo
+       do j = 1, nlat
+          bd_ax ( j, k ) = ztend ( 1, j, k )
+          bd_bx ( j, k ) = ztend ( nlon, j, k )
        enddo
     enddo
-    bd_ay ( 1, : ) = ( ztend ( 1, 1, : ) + &
-         ztend ( nlon, 1, : ) ) / 2
-    bd_by ( 1, : ) = ( ztend ( 1, nlat, : ) + &
-         ztend ( nlon, nlat, : ) ) / 2
-    bd_ay ( nlon + 1, : ) = bd_ay ( 1, : )
-    bd_by ( nlon + 1, : )  =bd_by ( 1, : )
 
-    bd_0 = 0.0e0
+    bd_0y = 0.0e0
+    bd_0x = 0.0e0
 
 ! Integration
     do i=1,n_terms
@@ -475,22 +474,22 @@ contains
        do i=1,5
           ! Five first terms with zero y-boundaries
           call poisson_solver_2D( gvortTends( :, :, k, i ), &
-               dx, dy, hTends(:,:,k,i), bd_0 ( :, k ), bd_0 ( :, k ) )
+               dx, dy, hTends(:,:,k,i), bd_0y ( :, k ), bd_0y ( :, k ), bd_0x ( :, k ), bd_0x ( :, k ) )
        enddo
        ! B-term
        if (calc_b) then
           call poisson_solver_2D( gvortTends ( :, :, k, 8 ), &
-               dx, dy, hTends(:,:,k,8), bd_0 ( :, k ), bd_0 ( :, k ) )
+               dx, dy, hTends(:,:,k,8), bd_0y ( :, k ), bd_0y ( :, k ), bd_0x ( :, k ), bd_0x ( :, k ) )
        end if
        ! Vorticity advection by divergent winds
        call poisson_solver_2D( gvortTends ( :, :, k, termVKhi ), &
-            dx, dy, hTends(:,:,k,termVKhi), bd_ay ( :, k ), bd_by ( :, k ) )
+            dx, dy, hTends(:,:,k,termVKhi), bd_ay ( :, k ), bd_by ( :, k ), bd_ax( :, k ), bd_bx( :, k ) )
        ! Thermal advection by divergent winds
        call poisson_solver_2D( gvortTends ( :, :, k, termTKhi ), &
-            dx, dy, hTends(:,:,k,termTKhi), bd_ay ( :, k ), bd_by ( :, k ) )
+            dx, dy, hTends(:,:,k,termTKhi), bd_ay ( :, k ), bd_by ( :, k ), bd_ax( :, k ), bd_bx( :, k ) )
        ! WRF omega height tendency
  !      call poisson_solver_2D( gvtend_omegaWRF ( :, :, k ), &
- !           dx, dy, hTends(:,:,k,termTKhi), bd_ay ( :, k ), bd_by ( :, k ) )
+ !           dx, dy, hTends(:,:,k,termTKhi), bd_ay ( :, k ), bd_by ( :, k ), bd_ax( :, k ), bd_ay( :, k ) )
     enddo
 
   end subroutine zwack_okossi
