@@ -30,16 +30,17 @@ contains
 !   Threshold values to keep the generalized omega equation elliptic.
     real,parameter :: sigmamin=2e-7,etamin=2e-6
 
-!   For iubound, ilbound and iybound are 0, horizontal boundary
+!   For iubound, ilbound, iybound and ixbound are 0, horizontal boundary
 !   conditions are used at the upper, lower and north/south boundaries
 !   A value of 1 for any of these parameters means that the boundary
 !   condition is taken directly from the "real" WRF omega. In practice,
 !   only the lower boundary condition (ilbound) is important.
-    integer :: iubound,ilbound,iybound
+    integer :: iubound,ilbound,iybound,ixbound
 
     iubound=1 ! 1 for "real" omega as upper-boundary condition
-    ilbound=1 ! 1 for "real" omega as upper-boundary condition
+    ilbound=1 ! 1 for "real" omega as lower-boundary condition
     iybound=1 ! 1 for "real" omega as north/south boundary condtion
+    ixbound=1 ! 1 for "real" omega as west/east boundary condtion
 
     associate ( &
          nlon => file % nlon(1), &
@@ -161,6 +162,8 @@ contains
        boundaries(:,:,nlev,1)=ilbound*omegaan(:,:,nlev)
        boundaries(:,1,2:nlev-1,1)=iybound*omegaan(:,1,2:nlev-1)
        boundaries(:,nlat,2:nlev-1,1)=iybound*omegaan(:,nlat,2:nlev-1)
+       boundaries(1,:,2:nlev-1,1)=ixbound*omegaan(1,:,2:nlev-1)
+       boundaries(nlon,:,2:nlev-1,1)=ixbound*omegaan(nlon,:,2:nlev-1)
     end if
 !   Regrid left-hand-side parameters and boundary conditions to
 !   coarser grids. Note that non-zero boundary conditions are only
@@ -762,6 +765,10 @@ contains
           omegaold(i,1,k)=boundaries(i,1,k)
           omegaold(i,nlat,k)=boundaries(i,nlat,k)
        enddo
+       do j=1,nlat
+          omegaold(1,j,k)=boundaries(1,j,k)
+          omegaold(nlon,j,k)=boundaries(nlon,j,k)
+       enddo
     enddo
 
     omega=omegaold
@@ -807,7 +814,7 @@ contains
 
     do k=2,nlev-1
        do j=2,nlat-1
-          do i=1,nlon
+          do i=2,nlon-1
              coeff(i,j,k)=sigma(k)*coeff1(i,j,k)+etasq(i,j,k)*coeff2(i,j,k)
              omega(i,j,k)=(rhs(i,j,k)-sigma(k)*lapl2(i,j,k)- &
                   etasq(i,j,k)*domedp2(i,j,k)) / coeff(i,j,k)
@@ -819,7 +826,7 @@ contains
     maxdiff=0.
     do k=2,nlev-1
        do j=2,nlat-1
-          do i=1,nlon
+          do i=2,nlon-1
              maxdiff=max(maxdiff,abs(omega(i,j,k)-omegaold(i,j,k)))
              omegaold(i,j,k)=alfa*omega(i,j,k)+(1-alfa)*omegaold(i,j,k)
           enddo
@@ -1024,6 +1031,10 @@ contains
           omegaold(i,1,k)=boundaries(i,1,k)
           omegaold(i,nlat,k)=boundaries(i,nlat,k)
        enddo
+       do j=1,nlat
+          omegaold(1,j,k)=boundaries(1,j,k)
+          omegaold(nlon,j,k)=boundaries(nlon,j,k)
+       enddo
     enddo
 
     omega=omegaold
@@ -1069,7 +1080,7 @@ contains
 
     real,dimension(:,:,:),allocatable :: lapl2,domedp2,coeff1,coeff2,coeff
     real,dimension(:,:,:),allocatable :: dum0,dum1,dum3,dum4,dum5,dum6,inv_coeff
-    integer :: j,k,nlon,nlat,nlev
+    integer :: i,j,k,nlon,nlat,nlev
 
     nlon=size(rhs,1)
     nlat=size(rhs,2)
@@ -1108,20 +1119,22 @@ contains
     dum3 = pder(dum6,dlev)
 !
 !   Solving for omega
-!   Old values are retained at y and z boundaries.
+!   Old values are retained at x, y and z boundaries.
 !
     do k=2,nlev-1
-       coeff(:,2:nlat-1,k)=sigma0(k)*coeff1(:,2:nlat-1,k) &
-            + feta(:,2:nlat-1,k)*coeff2(:,2:nlat-1,k) &
-            - f(:,2:nlat-1,k)*d2zetadp(:,2:nlat-1,k)
-       omega(:,2:nlat-1,k)=(rhs(:,2:nlat-1,k)-dum1(:,2:nlat-1,k) &
-            -dum3(:,2:nlat-1,k)-sigma0(k)*lapl2(:,2:nlat-1,k) &
-            -feta(:,2:nlat-1,k)*domedp2(:,2:nlat-1,k)) / coeff(:,2:nlat-1,k)
+       coeff(2:nlon-1,2:nlat-1,k)=sigma0(k)*coeff1(2:nlon-1,2:nlat-1,k) &
+            + feta(2:nlon-1,2:nlat-1,k)*coeff2(2:nlon-1,2:nlat-1,k) &
+            - f(2:nlon-1,2:nlat-1,k)*d2zetadp(2:nlon-1,2:nlat-1,k)
+       omega(2:nlon-1,2:nlat-1,k)=(rhs(2:nlon-1,2:nlat-1,k)-dum1(2:nlon-1,2:nlat-1,k) &
+            -dum3(2:nlon-1,2:nlat-1,k)-sigma0(k)*lapl2(2:nlon-1,2:nlat-1,k) &
+            -feta(2:nlon-1,2:nlat-1,k)*domedp2(2:nlon-1,2:nlat-1,k)) / coeff(2:nlon-1,2:nlat-1,k)
     enddo
 
     do k=2,nlev-1
        do j=2,nlat-1
-          omegaold(:,j,k)=alfa*omega(:,j,k)+(1-alfa)*omegaold(:,j,k)
+       		do i=2,nlon-1
+          		omegaold(i,j,k)=alfa*omega(i,j,k)+(1-alfa)*omegaold(i,j,k)
+            end do
        enddo
     enddo
 
@@ -1191,12 +1204,14 @@ contains
 !      As laplace_cart but
 !        - the contribution of the local value to the Laplacian is left out
 !        - coeff is the coefficient for the local value
+!        - Dirichlet boundaries are not included (dummy values) because they won't be updated during the course
 !
     real,dimension(:,:,:),intent(in) :: f
     real,dimension(:,:,:),intent(out) :: lapl2,coeff
     real,intent(in) :: dx,dy
     integer :: nlon,nlat,nlev,i,j,k,c
     real :: inv_dx,inv_dy
+    logical :: period = .false.
     nlon=size(f,1)
     nlat=size(f,2)
     nlev=size(f,3)
@@ -1209,8 +1224,10 @@ contains
        ! x-direction
        lapl2 ( 2 : nlon - 1, :, : ) = f( 1: nlon - 2, :, : ) &
             + f ( 3: nlon, :, : )
-       lapl2 ( 1, :, : )    = f( nlon, :, : ) + f ( 2, :, : )
-       lapl2 ( nlon, :, : ) = f( nlon - 1, :, : ) + f ( 1, :, : )
+       if ( period ) then
+       		lapl2 ( 1, :, : )    = f( nlon, :, : ) + f ( 2, :, : )
+       		lapl2 ( nlon, :, : ) = f( nlon - 1, :, : ) + f ( 1, :, : )
+       end if
        lapl2 = lapl2 * inv_dx
 
        ! y-direction
@@ -1218,9 +1235,12 @@ contains
             + ( f ( :, 1 : nlat -2, : ) + f ( :, 3 : nlat, :) ) * inv_dy
 
        coeff ( :, 2 : nlat -1, : ) = -2 * (inv_dx + inv_dy)
-       coeff ( :, 1, : ) = -2 * ( inv_dx )
-       coeff ( :, nlat, : ) = -2 * ( inv_dx )
-    case(2)
+       if ( period ) then
+       		coeff ( :, 1, : ) = -2 * ( inv_dx )
+       		coeff ( :, nlat, : ) = -2 * ( inv_dx )
+       end if
+       
+    case(2)  !lcq: Have not adjusted the 2nd accuracy derivative to non-periodic version
        do j=1,nlat
           do k=1,nlev
              do i=1,nlon

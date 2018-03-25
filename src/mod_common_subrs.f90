@@ -171,13 +171,14 @@ contains
   end function pder
 
   function xder_cart(f,dx) result(dfdx)
-!   Calculation of x derivatives. Periodic domain in x assumed
+!   Calculation of x derivatives.
     implicit none
 
     real,dimension(:,:,:),intent(in) :: f
     real,                 intent(in) :: dx
     real,dimension(:,:,:),allocatable  :: dfdx
     real :: inv_dx
+    logical :: period = .false.
     integer :: i,j,k,nlon,nlat,nlev,i1,i2,acc,i_1,i_2
     nlon=size(f,1); nlat=size(f,2); nlev=size(f,3)
     allocate(dfdx(nlon,nlat,nlev))
@@ -191,8 +192,10 @@ contains
              do i=1,nlon
                 i1=max(i-1,1)
                 i2=min(i+1,nlon)
-                if(i1.eq.i)i1=nlon
-                if(i2.eq.i)i2=1
+                if ( period ) then
+                    if(i1.eq.i)i1=nlon
+                    if(i2.eq.i)i2=1
+                end if
                 dfdx(i,j,k)=(f(i2,j,k)-f(i1,j,k))*inv_dx
              enddo
           enddo
@@ -205,15 +208,17 @@ contains
                 i_1=i-1
                 i1=i+1
                 i2=i+2
-                if(i==2)i_2=nlon
-                if(i==1)then
-                   i_2=nlon-1
-                   i_1=nlon
-                end if
-                if(i==nlon-1)i2=1
-                if(i==nlon)then
-                   i1=1
-                   i2=2
+                if ( period ) then
+                    if(i==2)i_2=nlon
+                    if(i==1)then
+                        i_2=nlon-1
+                        i_1=nlon
+                    end if
+                    if(i==nlon-1)i2=1
+                    if(i==nlon)then
+                        i1=1
+                        i2=2
+                    end if
                 end if
                 dfdx(i,j,k)=(f(i_2,j,k)-8*f(i_1,j,k)+8*f(i1,j,k)-f(i2,j,k))&
                             /(12*dx)
@@ -344,7 +349,9 @@ contains
 !     Laplace operator in cartesian coordinates.
 !     The domain is assumed to be periodic in east-west-direction
 !     ** At the northern and southern boundaries, second y derivative
-!     is assumed to be zero
+!     is assumed to be zero because they are not used when solving Dirichlet boundary problems 
+      !lcq: adjusting but useless
+      
     implicit none
 
     real,dimension(:,:,:),intent(in) :: f
@@ -352,6 +359,7 @@ contains
     real,dimension(:,:,:),allocatable :: lapl
     integer :: nlon,nlat,nlev,acc,i,j,k
     real :: inv_dx,inv_dy
+    logical :: period = .false.
     nlon=size(f,1)
     nlat=size(f,2)
     nlev=size(f,3)
@@ -365,18 +373,31 @@ contains
        ! x-direction
        lapl ( 2 : nlon - 1, :, : ) = f( 1: nlon - 2, :, : ) + f ( 3: nlon, :, : ) &
             - 2 * f( 2 : nlon - 1, :, : )
-       lapl ( 1, :, : )    = f( nlon, :, : ) + f ( 2, :, : ) &
-            - 2 * f( 1, :, : )
-       lapl ( nlon, :, : ) = f( nlon - 1, :, : ) + f ( 1, :, : ) &
-            - 2 * f( nlon, :, : )
+       if ( period ) then
+            lapl ( 1, :, : )    = f( nlon, :, : ) + f ( 2, :, : ) &
+                - 2 * f( 1, :, : )
+            lapl ( nlon, :, : ) = f( nlon - 1, :, : ) + f ( 1, :, : ) &
+                - 2 * f( nlon, :, : )
+       else
+            lapl ( 1, :, : )    = f( 1, :, : ) + f ( 3, :, : ) &
+                - 2 * f( 2, :, : )
+            lapl ( nlon, :, : ) = f( nlon, :, : ) + f ( nlon - 2, :, : ) &
+                - 2 * f( nlon - 1, :, : )
+       end if
        lapl = lapl * inv_dx
 
        ! y-directon
        lapl ( :, 2 : nlat -1, : ) = lapl ( :, 2 : nlat -1, : ) &
             + ( f ( :, 1 : nlat -2, : ) + f ( :, 3 : nlat, :) &
             - 2 * f( :, 2 : nlat -1, : ) ) * inv_dy
+       lapl ( :, 1, : ) = lapl ( :, 1, : ) &
+            + ( f ( :, 1, : ) + f ( :, 3, :) &
+            - 2 * f( :, 2, : ) ) * inv_dy
+       lapl ( :, nlat, : ) = lapl ( :, nlat, : ) &
+            + ( f ( :, nlat, : ) + f ( :, nlat-2, :) &
+            - 2 * f( :, nlat-1, : ) ) * inv_dy
 
-    case(2)
+    case(2) ! lcq: Have not adjusted the 2nd accuracy derivative to non-periodic version
 
        do j=1,nlat
           do k=1,nlev
