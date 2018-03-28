@@ -13,7 +13,7 @@ program zo
   namelist/PARAM/infile,outfile,alfa,toler,ny1,ny2,time_1,time_n,&
        mode,calc_omegas,calc_div,debug,forc
   read(*,nml=PARAM)
-  calc_b=.false.
+  calc_b=.true.
 
   if(mode.eq.'G')write(*,*)'Generalized omega equation'
   if(mode.eq.'Q')write(*,*)'Quasi-geostrophic omega equation'
