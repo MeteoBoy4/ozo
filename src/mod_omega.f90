@@ -272,7 +272,7 @@ contains
        enddo
 
        if (calc_b) then
-          !       Write(*,*)'Boundary conditions'
+          if(debug)print*,'QG '//ome_b_long_name
           call callsolveQG(zero,boundaries,omega,nlonx,nlatx,nlevx,dx2,dy2,dlev2,&
                sigma0,mapf3D,feta,nres,alfa,toler,debug)
           omegas_QG(:,:,:,3)=omega(:,:,:,1)

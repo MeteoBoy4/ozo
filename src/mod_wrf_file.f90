@@ -124,6 +124,17 @@ contains
                trim('Pa s-1') ) )
        end do
 
+       if (calc_b) then ! create QG-omega b-variable if wanted
+          status = nf90_def_var ( f % ncid, trim ( ome_b_name//'_QG' ), &
+               NF90_FLOAT, dimids, varid )
+          if ( .not. ( status == nf90_enameinuse .or. status == NF90_NOERR ) ) &
+               call check ( status )
+          call check( nf90_put_att(f % ncid, varid,trim('description'),&
+               trim('QG '//ome_b_long_name) ) )
+          call check( nf90_put_att(f % ncid, varid,trim('units'),&
+               trim('Pa s-1') ) )
+       end if
+
     else
 
        ! Create generalized omega variables

@@ -358,9 +358,9 @@ contains
 
         if (calc_b) then
            call check ( nf90_inq_varid ( ncid, &
-                trim ( ome_b_name ), varid ) )
+                trim ( ome_b_name//'_QG' ), varid ) )
            call check ( nf90_put_var ( ncid, varid, &
-                omegas ( :, :, :, 8 ), &
+                omegas_QG ( :, :, :, 3 ), &
                 [ 1, 1, 1, time ], &
                 [ nlon, nlat, nlev, 1 ] ) )
         end if
