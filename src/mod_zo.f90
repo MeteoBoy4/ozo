@@ -10,7 +10,7 @@ contains
 !
 !------------SUBROUTINES--------------
 !
-  subroutine calculate_tendencies(omegas,t,u,v,w,z,lev,dx,dy,corpar,q,xfrict,&
+  subroutine calculate_tendencies(omegas,t,u,v,w,z,lev,dx,dy,mapf3D,corpar,q,xfrict,&
        yfrict,ztend,ttend,zeta,zetatend,uKhi,vKhi,sigma,mulfact,calc_b,hTends,&
        vadv,tadv,fvort,avortt)
 
@@ -23,6 +23,7 @@ contains
     real,dimension(:,:,:),  intent(in) :: ttend,mulfact,uKhi,vKhi,sigma
     real,dimension(:),      intent(in) :: lev
     real,dimension(:,:),    intent(in) :: corpar
+    real,dimension(:,:,:),  intent(in) :: mapf3D
     real,                   intent(in) :: dx,dy
     logical,                intent(in) :: calc_b
     real,dimension(:,:,:,:),intent(inout) :: hTends
@@ -52,7 +53,7 @@ contains
 !   p_interp does not do that.
     call interp1000(z,ztend,t,ttend)
 
-    call vorticity_tendencies(omegas,u,v,w,uKhi,vKhi,zeta,zetatend,dx,dy,&
+    call vorticity_tendencies(omegas,u,v,w,uKhi,vKhi,zeta,zetatend,dx,dy,mapf3D,&
                         corpar,dlev,xfrict,yfrict,ztend,vortTends,mulfact,&
                         vorTend_omegaWRF,vadv,fvort,avortt)
 
@@ -60,11 +61,11 @@ contains
     sp = define_sp(sigma,lev)
 
 !   Calculation of thermal advection
-    tadv = advect_cart(u,v,t,dx,dy)
+    tadv = advect_cart(u,v,t,dx,dy,mapf3D)
     tadv=-tadv*mulfact ! Minus sign because it's usually considered as negative
 
 !   Calculation of thermal advection by nondivergent/irrotational wind
-    tadvs = advect_cart(uKhi,vKhi,t,dx,dy)
+    tadvs = advect_cart(uKhi,vKhi,t,dx,dy,mapf3D)
     tadvs=-tadvs*mulfact
 
 !   Vorticity tendencies were multiplied by 'mulfact' in  'vorticity_tendencies'
@@ -72,7 +73,7 @@ contains
 
 !   Calculate height tendencies
     call zwack_okossi(vortTends,vorTend_omegaWRF,w,tadv,tadvs,q,omegas,sp,&
-                      corpar,dx,dy,calc_b,hTends,ztend)
+                      corpar,dx,dy,mapf3D,calc_b,hTends,ztend)
 
 !   Area mean correction
     call ht_correction(hTends,temptend,lev,omegas,sp,tadv,tadvs,q,calc_b)
@@ -190,7 +191,7 @@ contains
   end subroutine ht_correction
 
   subroutine vorticity_tendencies(omegas,u,v,w,uKhi,vKhi,zeta,zetatend,&
-                                  dx,dy,corpar,dlev,xfrict,yfrict,ztend,&
+                                  dx,dy,mapf3D,corpar,dlev,xfrict,yfrict,ztend,&
                                   vortTends,mulfact,vorTend_omegaWRF,&
                                   vadv,fvort,avortt)
 !   This function calculates both direct and indirect (associated with vertical
@@ -203,6 +204,7 @@ contains
     real,dimension(:,:,:),intent(in) :: u,v,w,zeta,zetatend,uKhi,vKhi,ztend
     real,dimension(:,:,:),intent(in) :: xfrict,yfrict,mulfact
     real,dimension(:,:),intent(in) :: corpar
+    real,dimension(:,:,:),intent(in) :: mapf3D
     real,dimension(:,:,:),intent(inout) :: vorTend_omegaWRF
     real,dimension(:,:,:,:),intent(inout) :: vortTends
 
@@ -230,25 +232,25 @@ contains
 
 !   Omega-related vorticity equation terms
     do i=1,n_terms
-       call vorterms(omegas(:,:,:,i),dx,dy,eta,u,v,zeta,dlev,vTend(:,:,:,:,i))
+       call vorterms(omegas(:,:,:,i),dx,dy,mapf3D,eta,u,v,zeta,dlev,vTend(:,:,:,:,i))
     enddo
 
-    call vorterms(w,dx,dy,eta,u,v,zeta,dlev,vTend_omegaWRF)
+    call vorterms(w,dx,dy,mapf3D,eta,u,v,zeta,dlev,vTend_omegaWRF)
 
 !   Vorticity advection term
-    vadv = advect_cart(u,v,eta,dx,dy)
+    vadv = advect_cart(u,v,eta,dx,dy,mapf3D)
     vadv=-vadv*mulfact ! Minus sign because it's considered negative
 
 !   Irrotational/nondivergent vorticity advection term
-    vadvs = advect_cart(uKhi,vKhi,eta,dx,dy)
+    vadvs = advect_cart(uKhi,vKhi,eta,dx,dy,mapf3D)
     vadvs=-vadvs*mulfact
 
 !   Friction-induced vorticity tendency
-    fvort = curl_cart(xfrict,yfrict,dx,dy)
+    fvort = curl_cart(xfrict,yfrict,dx,dy,mapf3D)
     fvort=fvort*mulfact
 
 !   Ageostrophic vorticity tendency
-    call ageo_tend(zetatend,ztend,dx,dy,corpar,avortt)
+    call ageo_tend(zetatend,ztend,dx,dy,mapf3D,corpar,avortt)
     avortt=avortt*mulfact
 
 !   Totalling all terms, both direct and indirect effects:
@@ -271,10 +273,10 @@ contains
 
   end subroutine vorticity_tendencies
 
-  subroutine vorterms(omega,dx,dy,eta,u,v,zeta,dlev,vortt)
+  subroutine vorterms(omega,dx,dy,mapf3D,eta,u,v,zeta,dlev,vortt)
 !   This function calculates omega-related terms of vorticity equation
 
-    real,dimension(:,:,:),intent(in) :: omega,eta,u,v,zeta
+    real,dimension(:,:,:),intent(in) :: omega,eta,u,v,zeta,mapf3D
     real,                 intent(in) :: dx,dy,dlev
     real,dimension(:,:,:,:),intent(inout) :: vortt
 
@@ -285,7 +287,7 @@ contains
     call f3(omega,dlev,eta,vortt(:,:,:,2))
 
 !   Tilting/twisting term
-    call f4(omega,u,v,dx,dy,dlev,vortt(:,:,:,3))
+    call f4(omega,u,v,dx,dy,dlev,mapf3D,vortt(:,:,:,3))
 
   end subroutine vorterms
 
@@ -329,11 +331,11 @@ contains
 
   end subroutine f3
 
-  subroutine f4(omega,u,v,dx,dy,dlev,vortt4)
+  subroutine f4(omega,u,v,dx,dy,dlev,mapf3D,vortt4)
 !   This function calculates tilting/twisting term of vorticity equation,
 !   stored in vortt4.
 
-    real,dimension(:,:,:),intent(in) :: omega,u,v
+    real,dimension(:,:,:),intent(in) :: omega,u,v,mapf3D
     real,                 intent(in) :: dx,dy,dlev
     real,dimension(:,:,:),intent(inout) :: vortt4
     real,dimension(:,:,:),allocatable :: domegadx,domegady,dudp,dvdp
@@ -344,8 +346,8 @@ contains
     allocate ( dvdp(size(omega,1), size(omega,2), size(omega,3)))
 
 !   Gradient of omega
-    domegadx = xder_cart(omega,dx)
-    domegady = yder_cart(omega,dy)
+    domegadx = xder_cart(omega,dx,mapf3D)
+    domegady = yder_cart(omega,dy,mapf3D)
 
 !   Pressure derivative of wind vectors
     dudp = pder(u,dlev)
@@ -355,13 +357,13 @@ contains
 
   end subroutine f4
 
-  subroutine ageo_tend(zetatend,ztend,dx,dy,corpar,avortt)
+  subroutine ageo_tend(zetatend,ztend,dx,dy,mapf3D,corpar,avortt)
 !   This function calculates ageostrophic vorticity tendency (needed in
 !   ageostrophic vorticity tendency forcing).
 !   Input: Real vorticity tendency (zetatend), real height tendency (ztend)
 !   Output: Ageostrophic vorticity tendency (avortt)
 
-    real,dimension(:,:,:),intent(in) :: zetatend,ztend
+    real,dimension(:,:,:),intent(in) :: zetatend,ztend,mapf3D
     real,dimension(:,:),    intent(in) :: corpar
     real,                 intent(in) :: dx,dy
     real,dimension(:,:,:),intent(inout) :: avortt
@@ -373,7 +375,7 @@ contains
     allocate(lapl(nlon,nlat,nlev))
 
 !   Laplacian of height tendency
-    lapl = laplace_cart(ztend,dx,dy)
+    lapl = laplace_cart(ztend,dx,dy,mapf3D)
 
 !   Geostrophic vorticity tendency
     do j=1,nlat
@@ -389,7 +391,7 @@ contains
   end subroutine ageo_tend
 
   subroutine zwack_okossi(vortTends,vorTend_omegaWRF,w,tadv,tadvs,q,omegas,&
-                          sp,corpar,dx,dy,calc_b,hTends,ztend)
+                          sp,corpar,dx,dy,mapf3D,calc_b,hTends,ztend)
 
 !   This function calculates zwack-okossi equation for all forcings.
 !   Input: vorticity tendencies of forcings, omegas, thermal advection and
@@ -398,7 +400,7 @@ contains
 
     real,dimension(:,:,:,:),intent(in) :: omegas
     real,dimension(:,:,:,:),intent(inout) :: vortTends
-    real,dimension(:,:,:),intent(in) :: tadv,tadvs,q,sp
+    real,dimension(:,:,:),intent(in) :: tadv,tadvs,q,sp,mapf3D
     real,                 intent(in) :: dx,dy
     real,dimension(:,:,:),intent(in) :: w,ztend
     real,dimension(:,:),intent(in) :: corpar
@@ -406,7 +408,7 @@ contains
     real,dimension(:,:,:),intent(inout) :: vorTend_omegaWRF
     real,dimension(:,:,:,:),intent(inout) :: hTends
 
-    real,dimension(:,:,:),allocatable :: corf
+    real,dimension(:,:,:),allocatable :: corf, mf2
     real,dimension(:,:,:),allocatable :: ttend_omegaWRF,gvtend_omegaWRF
     real,dimension(:,:,:,:),allocatable :: tempTends,gvortTends
     integer :: nlon,nlat,nlev,i,j,k
@@ -422,8 +424,10 @@ contains
     allocate ( bd_ax ( nlat, nlev ), bd_bx ( nlat, nlev ) )
     allocate ( bd_0y ( nlon, nlev ), bd_0x ( nlat, nlev ) )
     allocate(ttend_omegaWRF(nlon,nlat,nlev))
-    allocate(corf(nlon,nlat,nlev))
+    allocate(corf(nlon,nlat,nlev), mf2(nlon,nlat,nlev))
     allocate(gvtend_omegaWRF(nlon,nlat,nlev))
+
+    mf2 = mapf3D * mapf3D
 
     ttend_omegaWRF=0.
     gvtend_omegaWRF=0.
@@ -461,44 +465,44 @@ contains
 
 ! Integration
     do i=1,n_terms
-       call zo_integral(vortTends(:,:,:,i),tempTends(:,:,:,i),dx,dy,corf,&
+       call zo_integral(vortTends(:,:,:,i),tempTends(:,:,:,i),dx,dy,mapf3D,corf,&
             gvortTends(:,:,:,i))
     enddo
 
 ! Height tendency with WRF omega
     ttend_omegaWRF=sp*w+tadv+q
-    call zo_integral(vorTend_omegaWRF,ttend_omegaWRF,dx,dy,corf,&
+    call zo_integral(vorTend_omegaWRF,ttend_omegaWRF,dx,dy,mapf3D,corf,&
          gvtend_omegaWRF)
 
     do k=1,nlev
        do i=1,5
           ! Five first terms with zero y-boundaries
-          call poisson_solver_2D( gvortTends( :, :, k, i ), &
+          call poisson_solver_2D( gvortTends( :, :, k, i ) / mf2(:,:,k), &
                dx, dy, hTends(:,:,k,i), bd_0y ( :, k ), bd_0y ( :, k ), bd_0x ( :, k ), bd_0x ( :, k ) )
        enddo
        ! B-term
        if (calc_b) then
-          call poisson_solver_2D( gvortTends ( :, :, k, 8 ), &
+          call poisson_solver_2D( gvortTends ( :, :, k, 8 ) / mf2(:,:,k), &
                dx, dy, hTends(:,:,k,8), bd_0y ( :, k ), bd_0y ( :, k ), bd_0x ( :, k ), bd_0x ( :, k ) )
        end if
        ! Vorticity advection by divergent winds
-       call poisson_solver_2D( gvortTends ( :, :, k, termVKhi ), &
+       call poisson_solver_2D( gvortTends ( :, :, k, termVKhi ) / mf2(:,:,k), &
             dx, dy, hTends(:,:,k,termVKhi), bd_ay ( :, k ), bd_by ( :, k ), bd_ax( :, k ), bd_bx( :, k ) )
        ! Thermal advection by divergent winds
-       call poisson_solver_2D( gvortTends ( :, :, k, termTKhi ), &
+       call poisson_solver_2D( gvortTends ( :, :, k, termTKhi ) / mf2(:,:,k), &
             dx, dy, hTends(:,:,k,termTKhi), bd_ay ( :, k ), bd_by ( :, k ), bd_ax( :, k ), bd_bx( :, k ) )
        ! WRF omega height tendency
- !      call poisson_solver_2D( gvtend_omegaWRF ( :, :, k ), &
+ !      call poisson_solver_2D( gvtend_omegaWRF ( :, :, k ) / mf2(:,:,k), &
  !           dx, dy, hTends(:,:,k,termTKhi), bd_ay ( :, k ), bd_by ( :, k ), bd_ax( :, k ), bd_ay( :, k ) )
     enddo
 
   end subroutine zwack_okossi
 
-  subroutine zo_integral(vorttend,temptend,dx,dy,corpar,geo_vort)
+  subroutine zo_integral(vorttend,temptend,dx,dy,mapf3D,corpar,geo_vort)
 !   This function calculates integrals of zwack-okossi equation.
 !   It is done by slightly undocumented way.
 
-    real,dimension(:,:,:),intent(in) :: vorttend,temptend,corpar
+    real,dimension(:,:,:),intent(in) :: vorttend,temptend,mapf3D,corpar
     real,                 intent(in) :: dx,dy
     real,dimension(:,:,:),intent(inout) :: geo_vort
 
@@ -521,7 +525,7 @@ contains
     vort_mean(:,:)=vort_mean(:,:)*corpar(:,:,1)
 
 !   Laplacian of temperature tendency
-    lapltemp = laplace_cart(temptend,dx,dy)
+    lapltemp = laplace_cart(temptend,dx,dy,mapf3D)
 
 !   Divide laplacian of temperature tendency by "pressure" (Actually it is
 !   divided only by k (index), but that has been taken into account in the

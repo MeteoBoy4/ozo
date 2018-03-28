@@ -21,7 +21,7 @@ contains
     type ( wrf_file ),      intent(in) :: file
 
     real,dimension(:,:,:,:,:),allocatable :: rhs
-    real,dimension(:,:,:,:),allocatable :: boundaries,zero,sigma,feta,corfield
+    real,dimension(:,:,:,:),allocatable :: boundaries,zero,sigma,feta,corfield,mapf3D
     real,dimension(:,:,:,:),allocatable :: dudp,dvdp,ftest,d2zetadp,omega
     real,dimension(:,:,:),  allocatable :: zeta
     real,dimension(:,:),    allocatable :: sigma0
@@ -67,6 +67,7 @@ contains
     allocate(dudp(nlon,nlat,nlev,nres),dvdp(nlon,nlat,nlev,nres))
     allocate(sigma0(nlev,nres))
     allocate(rhs(nlon,nlat,nlev,nres,n_terms))
+    allocate(mapf3D(nlon,nlat,nlev,nres))
 
     zero = 0.   ! Add by lcq : some compiler will give wrong numbers to allocatable array without initialization
 
@@ -77,30 +78,36 @@ contains
        end do
     enddo
 
+    do j=1,nlat
+        do i=1,nlon
+            mapf3D(i,j,:,1) = file % mapf(i,j)
+        end do
+    enddo
+
 !   For quasi-geostrophic equation: calculation of geostrophic winds
 !
     if(mode.eq.'Q')then
-       call gwinds(z,dx,dy,corfield(:,:,:,1),u,v)
+       call gwinds(z,dx,dy,mapf3D(:,:,:,1),corfield(:,:,:,1),u,v)
     endif
 
 !   Calculation of forcing terms
 !
     if(mode.eq.'G'.or.mode.eq.'Q')then
-       rhs(:,:,:,1,termV) = fvort(u,v,zetaraw,corfield(:,:,:,1),dx,dy,dlev,&
+       rhs(:,:,:,1,termV) = fvort(u,v,zetaraw,mapf3D(:,:,:,1),corfield(:,:,:,1),dx,dy,dlev,&
                                   mulfact)
-       rhs(:,:,:,1,termT) = ftemp(u,v,t,lev,dx,dy,mulfact)
+       rhs(:,:,:,1,termT) = ftemp(u,v,t,lev,dx,dy,mapf3D(:,:,:,1),mulfact)
     endif
 
     if(mode.eq.'G')then
-       rhs(:,:,:,1,termF) = ffrict(xfrict,yfrict,corfield(:,:,:,1),dx,dy,dlev,&
+       rhs(:,:,:,1,termF) = ffrict(xfrict,yfrict,mapf3D(:,:,:,1),corfield(:,:,:,1),dx,dy,dlev,&
                                    mulfact)
-       rhs(:,:,:,1,termQ) = fdiab(q,lev,dx,dy,mulfact)
-       rhs(:,:,:,1,termA) = fimbal(zetatend,ttend,corfield(:,:,:,1),lev,dx,dy,&
+       rhs(:,:,:,1,termQ) = fdiab(q,lev,dx,dy,mapf3D(:,:,:,1),mulfact)
+       rhs(:,:,:,1,termA) = fimbal(zetatend,ttend,mapf3D(:,:,:,1),corfield(:,:,:,1),lev,dx,dy,&
                                    dlev,mulfact)
        if(calc_div)then
-          rhs(:,:,:,1,termVKhi) = fvort(ukhi,vkhi,zetaraw,corfield(:,:,:,1),&
+          rhs(:,:,:,1,termVKhi) = fvort(ukhi,vkhi,zetaraw,mapf3D(:,:,:,1),corfield(:,:,:,1),&
                                         dx,dy,dlev,mulfact)
-          rhs(:,:,:,1,termTKhi) = ftemp(ukhi,vkhi,t,lev,dx,dy,mulfact)
+          rhs(:,:,:,1,termTKhi) = ftemp(ukhi,vkhi,t,lev,dx,dy,mapf3D(:,:,:,1),mulfact)
        endif
     endif
 
@@ -142,7 +149,7 @@ contains
 !   and substituting it to the RHS
 !
     if(mode.eq.'t')then
-       call QG_test(omegaan,sigma,feta,dx,dy,dlev,ftest)
+       call QG_test(omegaan,sigma,mapf3D(:,:,:,1),feta,dx,dy,dlev,ftest)
     endif ! mode.eq.'t'
 !
 !   Forcing for the general test case
@@ -150,7 +157,7 @@ contains
 !   and substituting it to the RHS
 
     if(mode.eq.'T')then
-       call gen_test(sigmaraw,omegaan,zetaraw,dudp(:,:,:,1),dvdp(:,:,:,1),&
+       call gen_test(sigmaraw,omegaan,mapf3D(:,:,:,1),zetaraw,dudp(:,:,:,1),dvdp(:,:,:,1),&
                      corfield(:,:,:,1),dx,dy,dlev,ftest)
     endif ! (forcing for the general test case if mode.eq.'T')
 
@@ -192,6 +199,8 @@ contains
             nlatx(i),nlevx(i))
        call coarsen3d(corfield(:,:,:,1),corfield(:,:,:,i),nlon,nlat,nlev,&
             nlonx(i),nlatx(i),nlevx(i))
+       call coarsen3d(mapf3D(:,:,:,1),mapf3D(:,:,:,i),nlon,nlat,nlev,&
+            nlonx(i),nlatx(i),nlevx(i))
        call coarsen3d(sigma0(:,1),sigma0(:,i),1,1,nlev,1,1,nlevx(i))
     enddo
 
@@ -211,13 +220,13 @@ contains
 
     if(mode.eq.'T')then
        call callsolvegen(ftest,boundaries,omega,nlonx,nlatx,nlevx,dx2,dy2,&
-            dlev2,sigma0,sigma,feta,corfield,d2zetadp,dudp,dvdp,nres,alfa,&
+            dlev2,sigma0,sigma,mapf3D,feta,corfield,d2zetadp,dudp,dvdp,nres,alfa,&
             toler,ny1,ny2,debug)
     endif
 
     if(mode.eq.'t')then
        call callsolveQG(ftest,boundaries,omega,nlonx,nlatx,nlevx,dx2,dy2,&
-            dlev2,sigma0,feta,nres,alfa,toler,debug)
+            dlev2,sigma0,mapf3D,feta,nres,alfa,toler,debug)
     endif
 
     if(mode.eq.'G')then
@@ -225,7 +234,7 @@ contains
        do i=1,5
           if(debug)print*,omega_long_names(i)
           call callsolvegen(rhs(:,:,:,:,i),zero,omega,nlonx,nlatx,nlevx,dx2,&
-               dy2,dlev2,sigma0,sigma,feta,corfield,d2zetadp,dudp,dvdp,nres,&
+               dy2,dlev2,sigma0,sigma,mapf3D,feta,corfield,d2zetadp,dudp,dvdp,nres,&
                alfa,toler,ny1,ny2,debug)
           omegas(:,:,:,i)=omega(:,:,:,1)
        enddo
@@ -233,19 +242,19 @@ contains
        if (calc_b) then
           if(debug)print*,ome_b_long_name
           call callsolvegen(zero,boundaries,omega,nlonx,nlatx,nlevx,dx2,dy2,&
-               dlev2,sigma0,sigma,feta,corfield,d2zetadp,dudp,dvdp,nres,alfa,&
+               dlev2,sigma0,sigma,mapf3D,feta,corfield,d2zetadp,dudp,dvdp,nres,alfa,&
                toler,ny1,ny2,debug)
           omegas(:,:,:,8)=omega(:,:,:,1)
        end if
        if (calc_div) then
           if(debug)print*,omega_long_names(6)
           call callsolvegen(rhs(:,:,:,:,termvkhi),zero,omega,nlonx,nlatx,nlevx,&
-               dx2,dy2,dlev2,sigma0,sigma,feta,corfield,d2zetadp,dudp,dvdp,&
+               dx2,dy2,dlev2,sigma0,sigma,mapf3D,feta,corfield,d2zetadp,dudp,dvdp,&
                nres,alfa,toler,ny1,ny2,debug)
           omegas(:,:,:,termvkhi)=omega(:,:,:,1)
           if(debug)print*,omega_long_names(7)
           call callsolvegen(rhs(:,:,:,:,termtkhi),zero,omega,nlonx,nlatx,nlevx,&
-               dx2,dy2,dlev2,sigma0,sigma,feta,corfield,d2zetadp,dudp,dvdp,&
+               dx2,dy2,dlev2,sigma0,sigma,mapf3D,feta,corfield,d2zetadp,dudp,dvdp,&
                nres,alfa,toler,ny1,ny2,debug)
           omegas(:,:,:,termtkhi)=omega(:,:,:,1)
        else
@@ -258,14 +267,14 @@ contains
        do i=1,2
           if(debug)print*,QG_omega_long_names(i)
           call callsolveQG(rhs(:,:,:,:,i),zero,omega,nlonx,nlatx,nlevx,dx2,&
-               dy2,dlev2,sigma0,feta,nres,alfa,toler,debug)
+               dy2,dlev2,sigma0,mapf3D,feta,nres,alfa,toler,debug)
           omegas_QG(:,:,:,i)=omega(:,:,:,1)
        enddo
 
        if (calc_b) then
           !       Write(*,*)'Boundary conditions'
           call callsolveQG(zero,boundaries,omega,nlonx,nlatx,nlevx,dx2,dy2,dlev2,&
-               sigma0,feta,nres,alfa,toler,debug)
+               sigma0,mapf3D,feta,nres,alfa,toler,debug)
           omegas_QG(:,:,:,3)=omega(:,:,:,1)
        endif
 
@@ -275,46 +284,46 @@ contains
 
   end subroutine calculate_omegas
 
-  subroutine QG_test(omegaan,sigma,feta,dx,dy,dlev,ftest)
+  subroutine QG_test(omegaan,sigma,mapf3D,feta,dx,dy,dlev,ftest)
 !   Forcing for quasigeostrophic test case ('t')
 !   In essence: calculating the LHS from the WRF omega (omegaan)
 !   and substituting it to the RHS
 
     real,dimension(:,:,:,:),intent(in) :: sigma,feta
-    real,dimension(:,:,:),  intent(in) :: omegaan
+    real,dimension(:,:,:),  intent(in) :: omegaan,mapf3D
     real,                   intent(in) :: dx,dy,dlev
     real,dimension(:,:,:,:),intent(out) :: ftest
     real,dimension(:,:,:),  allocatable :: df2dp2,lapl
 
     df2dp2 = p2der(omegaan,dlev)
-    lapl = laplace_cart(omegaan,dx,dy)
+    lapl = laplace_cart(omegaan,dx,dy,mapf3D)
 
     ftest(:,:,:,1)=sigma(:,:,:,1)*lapl+feta(:,:,:,1)*df2dp2
 
   end subroutine QG_test
 
-  subroutine gen_test(sigmaraw,omegaan,zetaraw,dudp,dvdp,corpar,dx,dy,dlev,&
+  subroutine gen_test(sigmaraw,omegaan,mapf3D,zetaraw,dudp,dvdp,corpar,dx,dy,dlev,&
        ftest)
 !   Forcing for the general test case
 !   In essence: calculating the LHS from the WRF omega (omegaan)
 !   and substituting it to the RHS
 
     real,dimension(:,:,:),  intent(in) :: sigmaraw,omegaan,zetaraw,corpar,&
-                                          dudp,dvdp
+                                          dudp,dvdp,mapf3D
     real,                   intent(in) :: dx,dy,dlev
     real,dimension(:,:,:,:),intent(out) :: ftest
     real,dimension(:,:,:),  allocatable :: lhs1,lhs2,lhs3,lhs4,dOmega_dx,&
                                            dOmega_dy,lhs4_0
 
     ! Calculate LHS terms of the omega equation
-    lhs1 = laplace_cart(sigmaraw*omegaan,dx,dy)
+    lhs1 = laplace_cart(sigmaraw*omegaan,dx,dy,mapf3D)
 
     lhs2 = (corpar+zetaraw)*corpar*p2der(omegaan,dlev)
 
     lhs3 = -corpar*omegaan*p2der(zetaraw,dlev)
 
-    dOmega_dx = xder_cart(omegaan,dx)
-    dOmega_dy = yder_cart(omegaan,dy)
+    dOmega_dx = xder_cart(omegaan,dx,mapf3D)
+    dOmega_dy = yder_cart(omegaan,dy,mapf3D)
 
     lhs4_0=-corpar*(dvdp*dOmega_dx-dudp*dOmega_dy)
 
@@ -397,11 +406,11 @@ contains
 
   end subroutine finen3D
 
-  subroutine gwinds(z,dx,dy,corpar,u,v)
+  subroutine gwinds(z,dx,dy,mapf3D,corpar,u,v)
 !   Calculation of geostrophic winds (u,v) from z. At the equator, mean of
 !   the two neighbouring latitudes is used (should not be a relevant case).
 !
-    real,dimension(:,:,:),intent(in) :: z,corpar
+    real,dimension(:,:,:),intent(in) :: z,mapf3D,corpar
     real,dimension(:,:,:),intent(out) :: u,v
     real,intent(in) :: dx,dy
     integer :: nlon,nlat,nlev,i,j,k
@@ -413,8 +422,8 @@ contains
 
     allocate ( dzdx(nlon, nlat, nlev), dzdy(nlon, nlat, nlev) )
 
-    dzdx = xder_cart(z,dx)
-    dzdy = yder_cart(z,dy)
+    dzdx = xder_cart(z,dx,mapf3D)
+    dzdy = yder_cart(z,dy,mapf3D)
     i=1
     j=1
     do k=1,nlev
@@ -501,12 +510,12 @@ contains
 
   end function aave
 
-  function fvort(u,v,zeta,corpar,dx,dy,dp,mulfact) result(fv)
+  function fvort(u,v,zeta,mapf3D,corpar,dx,dy,dp,mulfact) result(fv)
 !   Calculation of vorticity advection forcing
 !   Input: u,v,zeta
 !   Output: stored in "fv"
 !
-    real,dimension(:,:,:),intent(in) :: u,v,zeta,mulfact,corpar
+    real,dimension(:,:,:),intent(in) :: u,v,zeta,mulfact,mapf3D,corpar
     real,dimension(:,:,:),allocatable :: adv,dadvdp,fv
     real,intent(in) :: dx,dy,dp
     integer :: nlon,nlat,nlev
@@ -518,7 +527,7 @@ contains
     allocate(adv(nlon,nlat,nlev))
     allocate(dadvdp(nlon,nlat,nlev))
 
-    adv = advect_cart(u,v,zeta+corpar,dx,dy)
+    adv = advect_cart(u,v,zeta+corpar,dx,dy,mapf3D)
     adv = adv*mulfact
 
     dadvdp = pder(adv,dp)
@@ -527,12 +536,12 @@ contains
 
   end function fvort
 
-  function ftemp(u,v,t,lev,dx,dy,mulfact) result(ft)
+  function ftemp(u,v,t,lev,dx,dy,mapf3D,mulfact) result(ft)
 !   Calculation of temperature advection forcing
 !   Input: u,v,t
 !   Output: stored in "adv" (bad style ...)
 !
-    real,dimension(:,:,:),intent(in) :: u,v,t,mulfact
+    real,dimension(:,:,:),intent(in) :: u,v,t,mapf3D,mulfact
     real,dimension(:),intent(in) :: lev
     real,intent(in) :: dx,dy
     real,dimension(:,:,:),allocatable :: adv,lapladv,ft
@@ -545,10 +554,10 @@ contains
     allocate(adv(nlon,nlat,nlev))
     allocate(lapladv(nlon,nlat,nlev))
 
-    adv = advect_cart(u,v,t,dx,dy)
+    adv = advect_cart(u,v,t,dx,dy,mapf3D)
     adv = adv*mulfact
 
-    lapladv = laplace_cart(adv,dx,dy)
+    lapladv = laplace_cart(adv,dx,dy,mapf3D)
 
     do k=1,nlev
        ft(:,:,k)=lapladv(:,:,k)*r/lev(k)
@@ -556,12 +565,12 @@ contains
 
   end function ftemp
 
-  function ffrict(fx,fy,corpar,dx,dy,dp,mulfact) result(ff)
+  function ffrict(fx,fy,mapf3D,corpar,dx,dy,dp,mulfact) result(ff)
 !   Calculation of friction forcing
 !   Input: fx,fy = x and y components of "friction force"
 !   Output: ff
 !
-    real,dimension(:,:,:),intent(in) :: fx,fy,mulfact,corpar
+    real,dimension(:,:,:),intent(in) :: fx,fy,mapf3D,mulfact,corpar
     real,dimension(:,:,:),allocatable :: fcurl,dcurldp,ff
     real,intent(in) :: dx,dy,dp
     integer :: nlon,nlat,nlev
@@ -573,7 +582,7 @@ contains
     allocate(fcurl(nlon,nlat,nlev))
     allocate(dcurldp(nlon,nlat,nlev))
 
-    fcurl = curl_cart(fx,fy,dx,dy)
+    fcurl = curl_cart(fx,fy,dx,dy,mapf3D)
     fcurl=fcurl*mulfact
 
     dcurldp = pder(fcurl,dp)
@@ -582,13 +591,13 @@ contains
 
   end function ffrict
 
-  function fdiab(q,lev,dx,dy,mulfact) result(fq)
+  function fdiab(q,lev,dx,dy,mapf3D,mulfact) result(fq)
 !   Calculation of diabatic heaging forcing
 !   Input: q = diabatic temperature tendency (already normalized by cp)
 !   Output: stored in "fq"
 !
     real,dimension(:,:,:),intent(inout) :: q
-    real,dimension(:,:,:),intent(in) :: mulfact
+    real,dimension(:,:,:),intent(in) :: mapf3D,mulfact
     real,dimension(:,:,:),allocatable :: fq
     real,dimension(:),intent(in) :: lev
     real,intent(in) :: dx,dy
@@ -600,7 +609,7 @@ contains
     allocate(fq(nlon,nlat,nlev))
 
     q=q*mulfact
-    fq = laplace_cart(q,dx,dy)
+    fq = laplace_cart(q,dx,dy,mapf3D)
 
     do k=1,nlev
        fq(:,:,k)=-r*fq(:,:,k)/lev(k)
@@ -608,13 +617,13 @@ contains
 
   end function fdiab
 
-  function fimbal(dzetadt,dtdt,corpar,lev,dx,dy,dp,mulfact) result(fa)
+  function fimbal(dzetadt,dtdt,mapf3D,corpar,lev,dx,dy,dp,mulfact) result(fa)
 !   Calculation of the FA ("imbalance") forcing term
 !   Input: dzetadt, dtdt = vorticity & temperature tendencies
 !   Output: fa
 !
     real,dimension(:,:,:),intent(inout) :: dzetadt,dtdt
-    real,dimension(:,:,:),intent(in) ::  mulfact,corpar
+    real,dimension(:,:,:),intent(in) ::  mulfact,mapf3D,corpar
     real,dimension(:),intent(in) :: lev
     real,intent(in) :: dx,dy,dp
     real,dimension(:,:,:),allocatable :: ddpdzetadt,lapldtdt,fa
@@ -632,7 +641,7 @@ contains
 
     ddpdzetadt = pder(dzetadt,dp)
 
-    lapldtdt = laplace_cart(dtdt,dx,dy)
+    lapldtdt = laplace_cart(dtdt,dx,dy,mapf3D)
 
     ddpdzetadt = corpar*ddpdzetadt
     do k=1,nlev
@@ -642,7 +651,7 @@ contains
   end function fimbal
 
   subroutine callsolveQG(rhs,boundaries,omega,nlonx,nlatx,nlevx,&
-                         dx,dy,dlev,sigma0,feta,nres,alfa,toler,debug)
+                         dx,dy,dlev,sigma0,mapf3D,feta,nres,alfa,toler,debug)
 !
 !   Calling solveQG. Multigrid algorithm.
 !
@@ -651,7 +660,7 @@ contains
     integer,dimension(:),intent(in) :: nlonx,nlatx,nlevx
     real,dimension(:),intent(in) :: dx,dy,dlev
     real,dimension(:,:,:,:),intent(inout) :: rhs,omega
-    real,dimension(:,:,:,:),intent(in) :: boundaries,feta
+    real,dimension(:,:,:,:),intent(in) :: boundaries,mapf3D,feta
     real,dimension(:,:),intent(in) :: sigma0
     real,intent(in) :: alfa,toler
     real,dimension(:,:,:,:),allocatable :: omegaold
@@ -685,7 +694,7 @@ contains
           call solveQG(rhs(:,:,:,ires),boundaries(:,:,:,ires),&
                omega(:,:,:,ires),omegaold(:,:,:,ires),nlonx(ires),nlatx(ires),&
                nlevx(ires),dx(ires),dy(ires),dlev(ires),sigma0(:,ires),&
-               feta(:,:,:,ires),ny1,alfa,.true.,resid)
+               mapf3D(:,:,:,ires),feta(:,:,:,ires),ny1,alfa,.true.,resid)
           if(ires.eq.1)omega1(:,:,:)=omega(:,:,:,1)
           if(ires.lt.nres)then
              call coarsen3d(resid,rhs(:,:,:,ires+1),nlonx(ires),nlatx(ires),&
@@ -705,7 +714,7 @@ contains
           call solveQG(rhs(:,:,:,ires),boundaries(:,:,:,ires),&
                omega(:,:,:,ires),omegaold(:,:,:,ires),nlonx(ires),nlatx(ires),&
                nlevx(ires),dx(ires),dy(ires),dlev(ires),sigma0(:,ires),&
-               feta(:,:,:,ires),ny2,alfa,.false.,resid)
+               mapf3D(:,:,:,ires),feta(:,:,:,ires),ny2,alfa,.false.,resid)
        enddo
 
        maxdiff=0.
@@ -744,11 +753,11 @@ contains
   end subroutine callsolveQG
 
   subroutine solveQG(rhs,boundaries,omega,omegaold,nlon,nlat,nlev,&
-       dx,dy,dlev,sigma0,feta,niter,alfa,lres,resid)
+       dx,dy,dlev,sigma0,mapf3D,feta,niter,alfa,lres,resid)
 !   Solving the QG omega equation using 'niter' iterations.
 !
     integer,intent(in) :: nlon,nlat,nlev,niter
-    real,dimension(nlon,nlat,nlev),intent(in) :: rhs,boundaries,feta
+    real,dimension(nlon,nlat,nlev),intent(in) :: rhs,boundaries,mapf3D,feta
     real,dimension(nlon,nlat,nlev),intent(inout) :: omegaold,omega,resid
     logical,intent(in) :: lres
     real,intent(in) :: sigma0(nlev),dx,dy,dlev,alfa
@@ -774,23 +783,23 @@ contains
     omega=omegaold
 
     do i=1,niter
-       call updateQG(omegaold,omega,sigma0,feta,rhs,dx,dy,dlev,alfa)
+       call updateQG(omegaold,omega,sigma0,mapf3D,feta,rhs,dx,dy,dlev,alfa)
     enddo
 
     if(lres)then
-       call residQG(rhs,omega,sigma0,feta,dx,dy,dlev,resid)
+       call residQG(rhs,omega,sigma0,mapf3D,feta,dx,dy,dlev,resid)
     endif
 
   end subroutine solveQG
 
-  subroutine updateQG(omegaold,omega,sigma,etasq,rhs,dx,dy,dlev,alfa)
+  subroutine updateQG(omegaold,omega,sigma,mapf3D,etasq,rhs,dx,dy,dlev,alfa)
 !   New estimate for the local value of omega, using omega in the
 !   surrounding points and the right-hand-side forcing (rhs)
 !
 !   QG version: for 'sigma' and 'etasq', constant values from the QG theory
 !   are used.
 !
-    real,dimension(:,:,:),intent(in) :: rhs,etasq
+    real,dimension(:,:,:),intent(in) :: rhs,mapf3D,etasq
     real,dimension(:,:,:),intent(inout) :: omegaold,omega
     real,dimension(:),    intent(in) :: sigma
     real,                 intent(in) :: dx,dy,dlev,alfa
@@ -809,7 +818,7 @@ contains
 !   Top and bottom levels: omega directly from the boundary conditions,
 !   does not need to be solved.
 !
-    call laplace2_cart(omegaold,dx,dy,lapl2,coeff1)
+    call laplace2_cart(omegaold,dx,dy,mapf3D,lapl2,coeff1)
     call p2der2(omegaold,dlev,domedp2,coeff2)
 
     do k=2,nlev-1
@@ -836,7 +845,7 @@ contains
   end subroutine updateQG
 
 
-  subroutine residQG(rhs,omega,sigma,etasq,dx,dy,dlev,resid)
+  subroutine residQG(rhs,omega,sigma,mapf3D,etasq,dx,dy,dlev,resid)
 !   Calculating the residual RHS - LQG(omega)
 !
 !    Variables:
@@ -849,7 +858,7 @@ contains
 !    dudp,dvdp = pressure derivatives of wind components
 !    rhs = right-hand-side forcing
 !
-    real,dimension(:,:,:),intent(in) :: rhs,omega,etasq
+    real,dimension(:,:,:),intent(in) :: rhs,omega,mapf3D,etasq
     real,dimension(:,:,:),intent(out) :: resid
     real,dimension(:),    intent(in) :: sigma
     real,                 intent(in) :: dx,dy,dlev
@@ -862,7 +871,7 @@ contains
     allocate ( laplome(nlon, nlat, nlev))
     allocate ( domedp2(nlon, nlat, nlev))
 
-    laplome = laplace_cart(omega,dx,dy)
+    laplome = laplace_cart(omega,dx,dy,mapf3D)
     domedp2 = p2der(omega,dlev)
 
     do k=1,nlev
@@ -877,13 +886,13 @@ contains
   end subroutine residQG
 
   subroutine callsolvegen(rhs,boundaries,omega,nlon,nlat,nlev,&
-       dx,dy,dlev,sigma0,sigma,feta,corfield,d2zetadp,dudp,dvdp,&
+       dx,dy,dlev,sigma0,sigma,mapf3D,feta,corfield,d2zetadp,dudp,dvdp,&
        nres,alfa,toler,ny1,ny2,debug)
 !
 !   Calling solvegen + writing out omega. Multigrid algorithm
 !
     real,dimension(:,:,:,:),intent(inout) :: rhs,omega
-    real,dimension(:,:,:,:),intent(in) :: boundaries,sigma,feta,d2zetadp
+    real,dimension(:,:,:,:),intent(in) :: boundaries,sigma,mapf3D,feta,d2zetadp
     real,dimension(:,:,:,:),intent(in) :: dudp,dvdp,corfield
     real,dimension(:,:),    intent(in) :: sigma0
     real,dimension(:),      intent(in) :: dx,dy,dlev
@@ -924,7 +933,7 @@ contains
           call solvegen(rhs(:,:,:,ires),boundaries(:,:,:,ires),&
                omega(:,:,:,ires),omegaold(1,1,1,ires),nlon(ires),&
                nlat(ires),nlev(ires),dx(ires),dy(ires),dlev(ires),&
-               sigma0(:,ires),sigma(:,:,:,ires),feta(:,:,:,ires),&
+               sigma0(:,ires),sigma(:,:,:,ires),mapf3D(:,:,:,ires),feta(:,:,:,ires),&
                corfield(:,:,:,ires),d2zetadp(:,:,:,ires),dudp(:,:,:,ires),&
                dvdp(:,:,:,ires),ny1,alfa,.true.,resid)
 
@@ -947,7 +956,7 @@ contains
           call solvegen(rhs(:,:,:,ires),boundaries(:,:,:,ires),&
                omega(:,:,:,ires),omegaold(:,:,:,ires),nlon(ires),nlat(ires),&
                nlev(ires),dx(ires),dy(ires),dlev(ires),sigma0(:,ires),&
-               sigma(:,:,:,ires),feta(:,:,:,ires),corfield(:,:,:,ires),&
+               sigma(:,:,:,ires),mapf3D(:,:,:,ires),feta(:,:,:,ires),corfield(:,:,:,ires),&
                d2zetadp(:,:,:,ires),dudp(:,:,:,ires),dvdp(:,:,:,ires),ny2,&
                alfa,.false.,resid)
        enddo
@@ -987,7 +996,7 @@ contains
   end subroutine callsolvegen
 
   subroutine solvegen(rhs,boundaries,omega,omegaold,nlon,nlat,nlev,&
-       dx,dy,dlev,sigma0,sigma,feta,corpar,d2zetadp,dudp,dvdp,&
+       dx,dy,dlev,sigma0,sigma,mapf3D,feta,corpar,d2zetadp,dudp,dvdp,&
        niter,alfa,lres,resid)
 !
 !      Solving omega iteratively using the generalized LHS operator.
@@ -1012,7 +1021,7 @@ contains
 
     integer,intent(in) :: nlon,nlat,nlev,niter
     real,dimension(nlon,nlat,nlev),intent(inout) :: omega,omegaold
-    real,dimension(nlon,nlat,nlev),intent(in) :: rhs,feta,sigma,boundaries
+    real,dimension(nlon,nlat,nlev),intent(in) :: rhs,mapf3D,feta,sigma,boundaries
     real,dimension(nlon,nlat,nlev),intent(in) :: d2zetadp,dudp,dvdp,corpar
     real,dimension(nlon,nlat,nlev),intent(out) :: resid
     real,dimension(nlev),intent(in) :: sigma0
@@ -1040,20 +1049,20 @@ contains
     omega=omegaold
 
     do i=1,niter
-       call updategen(omegaold,omega,sigma0,sigma,feta,corpar,d2zetadp,dudp,&
+       call updategen(omegaold,omega,sigma0,sigma,mapf3D,feta,corpar,d2zetadp,dudp,&
             dvdp,rhs,dx,dy,dlev,alfa)
     enddo
 !
 !  Calculate the residual = RHS - L(omega)
 
     if(lres)then
-       call residgen(rhs,omega,resid,sigma,feta,corpar,d2zetadp,dudp,dvdp,&
+       call residgen(rhs,omega,resid,sigma,mapf3D,feta,corpar,d2zetadp,dudp,dvdp,&
             dx,dy,dlev)
     endif
 
   end subroutine solvegen
 
-  subroutine updategen(omegaold,omega,sigma0,sigma,feta,f,d2zetadp,dudp,dvdp,&
+  subroutine updategen(omegaold,omega,sigma0,sigma,mapf3D,feta,f,d2zetadp,dudp,dvdp,&
        rhs,dx,dy,dlev,alfa)
 !
 !      Calculating new local values of omega, based on omega in the
@@ -1074,7 +1083,7 @@ contains
 !      rhs = right-hand-side forcing
 
     real,dimension(:,:,:),intent(inout) :: omegaold,omega
-    real,dimension(:,:,:),intent(in) :: sigma,feta,rhs,d2zetadp,dudp,dvdp,f
+    real,dimension(:,:,:),intent(in) :: sigma,mapf3D,feta,rhs,d2zetadp,dudp,dvdp,f
     real,dimension(:),    intent(in) :: sigma0
     real,                 intent(in) :: dx,dy,dlev,alfa
 
@@ -1096,7 +1105,7 @@ contains
 !   Top and bottom levels: omega directly from the boundary conditions,
 !   does not need to be solved.
 !
-    call laplace2_cart(omegaold,dx,dy,lapl2,coeff1)
+    call laplace2_cart(omegaold,dx,dy,mapf3D,lapl2,coeff1)
     call p2der2(omegaold,dlev,domedp2,coeff2)
 !
 !   Calculate non-constant terms on the left-hand-side, based on 'omegaold'
@@ -1106,14 +1115,14 @@ contains
     do k=2,nlev-1
        dum0(:,:,k)=omegaold(:,:,k)*(sigma(:,:,k)-sigma0(k))
     enddo
-    dum1 = laplace_cart(dum0,dx,dy)
+    dum1 = laplace_cart(dum0,dx,dy,mapf3D)
 !
 !   b) f*omega*(d2zetadp): explicitly, later
 !
 !   c) tilting
 
-    dum4 = xder_cart(omegaold,dx)
-    dum5 = yder_cart(omegaold,dy)
+    dum4 = xder_cart(omegaold,dx,mapf3D)
+    dum5 = yder_cart(omegaold,dy,mapf3D)
 
     dum6 = f*(dudp*dum5-dvdp*dum4)
     dum3 = pder(dum6,dlev)
@@ -1140,7 +1149,7 @@ contains
 
   end subroutine updategen
 
-  subroutine residgen(rhs,omega,resid,sigma,feta,f,d2zetadp,dudp,dvdp, &
+  subroutine residgen(rhs,omega,resid,sigma,mapf3D,feta,f,d2zetadp,dudp,dvdp, &
        dx,dy,dlev)
 !
 !   Calculating the residual RHS - L(omega)
@@ -1155,7 +1164,7 @@ contains
 !   dudp,dvdp = pressure derivatives of wind components
 !   rhs = right-hand-side forcing
 
-    real,dimension(:,:,:),intent(in) :: rhs,omega,sigma,feta,d2zetadp
+    real,dimension(:,:,:),intent(in) :: rhs,omega,sigma,mapf3D,feta,d2zetadp
     real,dimension(:,:,:),intent(in) :: dudp,dvdp,f
     real,dimension(:,:,:),intent(out) :: resid
     real,intent(in) :: dx,dy,dlev
@@ -1179,7 +1188,7 @@ contains
 !    a) nabla^2(sigma*omega)
     dum0=omega*sigma
 
-    dum1 = laplace_cart(dum0,dx,dy)
+    dum1 = laplace_cart(dum0,dx,dy,mapf3D)
 !
 !   b) f*eta*d2omegadp
     dum2 = p2der(omega,dlev)
@@ -1189,8 +1198,8 @@ contains
 !   c) -f*omega*(d2zetadp): explicitly, later
 !
 !   d) tilting
-    dum4 = xder_cart(omega,dx)
-    dum5 = yder_cart(omega,dy)
+    dum4 = xder_cart(omega,dx,mapf3D)
+    dum5 = yder_cart(omega,dy,mapf3D)
 
     dum6=f*(dudp*dum5-dvdp*dum4)
     dum2 = pder(dum6,dlev)
@@ -1199,24 +1208,27 @@ contains
 
   end subroutine residgen
 
-  subroutine laplace2_cart(f,dx,dy,lapl2,coeff)
+  subroutine laplace2_cart(f,dx,dy,mf,lapl2,coeff)
 !
 !      As laplace_cart but
 !        - the contribution of the local value to the Laplacian is left out
 !        - coeff is the coefficient for the local value
 !        - Dirichlet boundaries are not included (dummy values) because they won't be updated during the course
 !
-    real,dimension(:,:,:),intent(in) :: f
+    real,dimension(:,:,:),intent(in) :: f,mf
     real,dimension(:,:,:),intent(out) :: lapl2,coeff
     real,intent(in) :: dx,dy
+    real,dimension(:,:,:),  allocatable :: mf2
     integer :: nlon,nlat,nlev,i,j,k,c
     real :: inv_dx,inv_dy
     logical :: period = .false.
     nlon=size(f,1)
     nlat=size(f,2)
     nlev=size(f,3)
+    allocate(mf2(nlon,nlat,nlev))
     inv_dx = 1.0 / (dx * dx)
     inv_dy = 1.0 / (dy * dy)
+    mf2 = mf * mf
     c=1
     select case (c)
     case(1)
@@ -1239,7 +1251,7 @@ contains
        		coeff ( :, 1, : ) = -2 * ( inv_dx )
        		coeff ( :, nlat, : ) = -2 * ( inv_dx )
        end if
-       
+
     case(2)  !lcq: Have not adjusted the 2nd accuracy derivative to non-periodic version
        do j=1,nlat
           do k=1,nlev
@@ -1288,6 +1300,9 @@ contains
        coeff(:,1,:)=-(5./2.)/(dx*dx)
        coeff(:,nlat,:)=-(5./2.)/(dx*dx)
     end select
+
+    lapl2 = mf2 * lapl2
+    coeff = mf2 * coeff
 
   end subroutine laplace2_cart
 

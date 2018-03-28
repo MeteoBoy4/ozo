@@ -57,7 +57,7 @@ module mod_wrf_file
 !     real :: dx, dy
      character (100) :: timestamp
      real, dimension ( : ), allocatable :: times, pressure_levels
-     real, dimension ( :, : ), allocatable :: corpar
+     real, dimension ( :, : ), allocatable :: corpar, mapf
      integer, dimension ( : ), allocatable :: nlon, nlat, nlev
      real, dimension ( : ), allocatable :: dx, dy, dlev
   end type wrf_file
@@ -347,6 +347,13 @@ contains
     call check ( nf90_get_var ( f % ncid, varid, f % corpar, &
          start = [ 1, 1, 2 ], &
          count = [ size ( f % corpar, 1 ), size ( f % corpar, 2 ), 1 ] ) )
+
+    print*,"Getting map scale factor from the input file..."
+    allocate ( f % mapf ( f % dims ( 1 ), f % dims ( 2 ) ) )
+    call check ( nf90_inq_varid ( f % ncid, 'MAPFAC_M', varid ) )
+    call check ( nf90_get_var ( f % ncid, varid, f % mapf, &
+         start = [ 1, 1, 2 ], &
+         count = [ size ( f % mapf, 1 ), size ( f % mapf, 2 ), 1 ] ) )
 
     print*,"Input file opened succesfully!"
   end function open_wrf_file

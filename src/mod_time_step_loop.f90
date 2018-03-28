@@ -23,10 +23,10 @@ contains
     real, dimension ( :, :, : ),    allocatable :: dT_dt, du_dt, dv_dt, dz_dt, &
                                                    fx, fy, q, w, mulfact,zeta, &
                                                    zetatend,ukhi,vkhi,khi,sigma,vadv, &
-                                                   tadv,fvort,avortt
+                                                   tadv,fvort,avortt,mapf3D
     real, dimension ( :, : ),       allocatable :: mu_inv, p_sfc
     integer, dimension ( : ),       allocatable :: tdim
-    integer :: time, i
+    integer :: time, i, j
 
     if (calc_b) then
        n_terms = n_terms + 1
@@ -39,7 +39,8 @@ contains
          dx     => wrfin_file % dx(1), &
          dy     => wrfin_file % dy(1), &
          p_levs => wrfin_file % pressure_levels, &
-         corpar => wrfin_file % corpar )
+         corpar => wrfin_file % corpar, &
+         mapf   => wrfin_file % mapf )
 
       allocate ( tdim ( time_n-time_1+1 ) )
       allocate ( hTends ( nlon, nlat, nlev, n_terms ) )
@@ -64,8 +65,15 @@ contains
       allocate ( sigma (nlon, nlat, nlev))
       allocate ( tadv (nlon, nlat, nlev))
       allocate ( vadv (nlon, nlat, nlev))
+      allocate ( mapf3D (nlon, nlat, nlev))
       allocate ( mu_inv (nlon, nlat))
       allocate ( p_sfc (nlon, nlat))
+
+      do j=1,nlat
+        do i=1,nlon
+            mapf3D(i,j,:) = mapf(i,j)
+        end do
+      enddo
 
       call read_T_u_v_z ( wrfin_file, time_1 - 2 )
       call read_T_u_v_z ( wrfin_file, time_1 - 1 )
@@ -81,12 +89,12 @@ contains
          fy     = friction ( wrfin_file, time, 'V', mu_inv )
          p_sfc  = real2d ( wrfin_file, time, [ 'PSFC' ]  )
          w      = real3d ( wrfin_file, time, [ 'WW' ]  )
-         zeta   = curl_cart ( u, v, dx, dy )
-         zetatend = curl_cart ( du_dt, dv_dt, dx, dy )
+         zeta   = curl_cart ( u, v, dx, dy, mapf3D )
+         zetatend = curl_cart ( du_dt, dv_dt, dx, dy, mapf3D )
          mulfact  = calmul(p_sfc, p_levs, nlev)
          sigma = define_sigma(T, p_levs)
          !   Calculation of velocity potential
-         if(calc_div) call irrotationalWind(u,v,dx,dy,uKhi,vKhi,khi)
+         if(calc_div) call irrotationalWind(u,v,dx,dy,mapf3D,uKhi,vKhi,khi)
 
          if ( calc_omegas ) then
             call calculate_omegas( wrfin_file, T, u, v, w, z, &
@@ -98,7 +106,7 @@ contains
          end if
 
          call calculate_tendencies ( omegas, T, u, v, w, z, p_levs, &
-              dx, dy, corpar, q, fx, fy, dz_dt, dT_dt, zeta, zetatend, &
+              dx, dy, mapf3D, corpar, q, fx, fy, dz_dt, dT_dt, zeta, zetatend, &
               uKhi, vKhi, sigma, mulfact, calc_b, hTends, vadv, tadv, &
               fvort, avortt )
 
