@@ -1,11 +1,19 @@
 SHELL           = /bin/bash
-FC              = gfortran
+FC              = ifort
 MAKEDEPF90      = ~/bin/makedepf90
-NETCDF_INCLUDES = -I/usr/include
-NETCDF_LIBS     = -L/usr/lib -lnetcdff
-MKLROOT         = /opt/intel/compilers_and_libraries/linux/mkl
+NETCDF_INCLUDES = -I/public/software/intel/netcdf4/include
+NETCDF_LIBS     = -L/public/software/intel/netcdf4/lib -lnetcdff -lnetcdf
+MKLROOT         = /public/software/compiler/intel/composer_xe_2015.2.164/mkl
 #FCFLAGS         = -g -pg -fbacktrace -fcheck=all -Wall $(NETCDF_INCLUDES) -m64 -I$(MKLROOT)/include
-FCFLAGS         = -Ofast -pg -fbacktrace -fcheck=all -Wall $(NETCDF_INCLUDES) -m64 -I$(MKLROOT)/include
+#FCFLAGS         = -Ofast -pg -fbacktrace -fcheck=all -Wall $(NETCDF_INCLUDES) -m64 -I$(MKLROOT)/include
+FCFLAGS         = -Ofast $(NETCDF_INCLUDES) -m64 -I$(MKLROOT)/include  #ifort
+#FCFLAGS         = -Ofast -pg -check all -traceback $(NETCDF_INCLUDES) -m64 -I$(MKLROOT)/include  #ifort
+# -Ofast: set some aggressive things to speed up the program
+# -pg: compiles and links for function profiling with gprof
+# -m64: tell to compile for 64-bit architecture
+# -check all: Enables all check options, disabling optimization ( take priority )
+# -traceback: open the traceback when errors happen
+#FCFLAGS         = -pg -fbacktrace -Wall $(NETCDF_INCLUDES) -m64 -I$(MKLROOT)/include
 LDFLAGS         = $(NETCDF_LIBS) -L$(MKLROOT)/lib/intel64 -Wl,--no-as-needed -lmkl_gf_lp64 -lmkl_sequential -lmkl_core -lpthread -lm
 
 PROG            = ozo
