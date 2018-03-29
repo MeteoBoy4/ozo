@@ -907,7 +907,7 @@ contains
     real :: maxdiff,aomega
     integer :: ires,iter,i,j,k
 
-    integer,parameter :: itermax=1000
+    integer,parameter :: itermax=1500
     logical,parameter :: lzeromean=.true. ! Area means of omega are set to zero
 
     allocate(dum1(nlon(1),nlat(1),nlev(1)))

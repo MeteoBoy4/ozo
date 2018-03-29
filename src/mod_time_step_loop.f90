@@ -239,6 +239,8 @@ contains
 !                [ 'RTHSHTEN', 'RTHCUTEN', 'RTHRATEN', 'RTHBLTEN' ] )
            q = real3d ( file, time, &
                 [ 'RTHCUTEN', 'RTHRATEN', 'RTHBLTEN' ] )
+        case ( 0 )
+            q = real3d ( file, time, [ 'RTHRATEN', 'RTHBLTEN' ] )
         end select
         do lev = 1, size ( q, 3 )
            q ( :, :, lev ) = q ( :, :, lev ) * mu_inv
@@ -268,6 +270,8 @@ contains
          friction = real3d ( file, time, &
               [ 'R'//direction//'CUTEN', &
               'R'//direction//'BLTEN' ] )
+      case ( 0 )
+         friction = real3d ( file, time, [ 'R'//direction//'BLTEN' ] )
       end select
       do lev = 1, size ( friction, 3 )
          friction ( :, :, lev ) = friction ( :, :, lev ) * mu_inv
