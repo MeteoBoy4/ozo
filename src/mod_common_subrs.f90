@@ -19,7 +19,7 @@ contains
     integer :: i,j,k,nlon,nlat,factor
     nlon=size(psfc,1); nlat=size(psfc,2)
     allocate(mulfact(nlon,nlat,nlev))
-    factor=2
+    factor=1
 
     select case (factor)
 
